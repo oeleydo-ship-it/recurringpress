@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Carbon\Carbon;
+use Inertia\Inertia;
 
 class PasswordResetController extends Controller
 {
@@ -22,7 +23,7 @@ class PasswordResetController extends Controller
      */
     public function showForgotForm()
     {
-        return view('auth.forgot-password');
+        return Inertia::render('Auth/ForgotPassword');
     }
 
     /**
@@ -74,7 +75,7 @@ class PasswordResetController extends Controller
      */
     public function showResetForm(Request $request, $token)
     {
-        return view('auth.reset-password', [
+        return Inertia::render('Auth/ResetPassword', [
             'token' => $token,
             'email' => $request->email,
         ]);

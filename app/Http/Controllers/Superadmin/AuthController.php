@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
+use Inertia\Inertia;
 
 class AuthController extends Controller
 {
@@ -21,7 +22,7 @@ class AuthController extends Controller
         if (Auth::guard('superadmin')->check()) {
             return redirect()->route('superadmin.dashboard');
         }
-        return view('superadmin.auth.login');
+        return Inertia::render('Superadmin/Auth/Login');
     }
 
     public function login(Request $request)

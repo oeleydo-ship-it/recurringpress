@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
+use Inertia\Inertia;
 
 class RegisterController extends Controller
 {
@@ -20,7 +21,10 @@ class RegisterController extends Controller
         $planSlug = $request->query('plan', 'free');
         $plan = \App\Models\SubscriptionPlan::where('slug', $planSlug)->first();
 
-        return view('auth.register', compact('plan'));
+        return Inertia::render('Auth/Register', [
+            'plan' => $plan?->only('name', 'slug', 'price'),
+            'planSlug' => $plan?->slug ?? 'free',
+        ]);
     }
 
     public function register(Request $request)

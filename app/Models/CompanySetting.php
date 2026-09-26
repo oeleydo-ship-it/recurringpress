@@ -10,6 +10,15 @@ class CompanySetting extends Model
 {
     use HasFactory;
 
+    /**
+     * Never serialize gateway secrets. Inertia sends props to the browser as JSON, so
+     * anything not hidden here would be readable in page source (including public pages).
+     */
+    protected $hidden = [
+        'stripe_secret_key',
+        'stripe_webhook_secret',
+    ];
+
     protected $fillable = [
         'company_id',
         'date_format',
