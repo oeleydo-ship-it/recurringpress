@@ -31,3 +31,20 @@ export async function requestJson(method, url, data) {
 }
 
 export const postJson = (url, data) => requestJson('POST', url, data);
+
+/** Multipart upload (e.g. superadmin media). Resolves to the parsed JSON response. */
+export async function uploadFile(url, file, field = 'image') {
+    const body = new FormData();
+    body.append(field, file);
+    const res = await fetch(url, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-XSRF-TOKEN': xsrfToken() },
+        body,
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || json.success === false) {
+        throw new Error(json.message || Object.values(json.errors ?? {})[0]?.[0] || `Upload failed (${res.status})`);
+    }
+    return json;
+}
