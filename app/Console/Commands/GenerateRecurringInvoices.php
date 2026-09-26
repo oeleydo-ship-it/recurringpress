@@ -2,76 +2,52 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\GenerateRecurringInvoice;
 use App\Models\RecurringInvoice;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Log;
 
 class GenerateRecurringInvoices extends Command
 {
-    protected $signature = 'invoices:generate-recurring {--dry-run : Show what would be generated without actually creating invoices}';
+    protected $signature = 'invoices:generate-recurring
+                            {--dry-run : Show what would be generated without actually creating invoices}
+                            {--sync : Generate inline instead of dispatching queue jobs}';
 
-    protected $description = 'Generate invoices from active recurring invoices that are due';
+    protected $description = 'Generate invoices from active recurring invoices that are due (one Horizon job per schedule)';
 
     public function handle(): int
     {
-        $dryRun = $this->option('dry-run');
-
-        $this->info('Checking for recurring invoices due for generation...');
-
-        $recurringInvoices = RecurringInvoice::withoutGlobalScope('company')
+        $due = RecurringInvoice::withoutGlobalScope('company')
+            ->with('client')
             ->where('status', RecurringInvoice::STATUS_ACTIVE)
             ->where('next_invoice_date', '<=', now())
             ->get();
 
-        if ($recurringInvoices->isEmpty()) {
+        if ($due->isEmpty()) {
             $this->info('No recurring invoices are due for generation.');
+
             return Command::SUCCESS;
         }
 
-        $this->info("Found {$recurringInvoices->count()} recurring invoice(s) due for generation.");
+        $this->info("Found {$due->count()} recurring invoice(s) due.");
 
-        $generated = 0;
-        $failed = 0;
+        foreach ($due as $recurring) {
+            $label = "{$recurring->name} (ID {$recurring->id}, client: " . ($recurring->client?->name ?? 'n/a') . ", {$recurring->total})";
 
-        foreach ($recurringInvoices as $recurringInvoice) {
-            $this->line("Processing: {$recurringInvoice->name} (ID: {$recurringInvoice->id})");
-
-            if ($dryRun) {
-                $this->info("  [DRY RUN] Would generate invoice for client: {$recurringInvoice->client->name}");
-                $this->info("  [DRY RUN] Amount: {$recurringInvoice->total}");
+            if ($this->option('dry-run')) {
+                $this->line("  [DRY RUN] would generate: {$label}");
                 continue;
             }
 
-            try {
-                $invoice = $recurringInvoice->generateInvoice();
-
-                if ($invoice) {
-                    $this->info("  Generated invoice: {$invoice->invoice_number}");
-                    $generated++;
-
-                    Log::info('Recurring invoice generated', [
-                        'recurring_invoice_id' => $recurringInvoice->id,
-                        'invoice_id' => $invoice->id,
-                        'invoice_number' => $invoice->invoice_number,
-                        'company_id' => $recurringInvoice->company_id,
-                    ]);
-                } else {
-                    $this->warn("  Could not generate invoice (conditions not met)");
-                }
-            } catch (\Exception $e) {
-                $this->error("  Failed to generate invoice: {$e->getMessage()}");
-                $failed++;
-
-                Log::error('Failed to generate recurring invoice', [
-                    'recurring_invoice_id' => $recurringInvoice->id,
-                    'error' => $e->getMessage(),
-                ]);
+            if ($this->option('sync')) {
+                (new GenerateRecurringInvoice($recurring->id))->handle();
+                $this->line("  Generated inline: {$label}");
+                continue;
             }
+
+            GenerateRecurringInvoice::dispatch($recurring->id);
+            $this->line("  Queued: {$label}");
         }
 
-        $this->newLine();
-        $this->info("Summary: {$generated} invoice(s) generated, {$failed} failed.");
-
-        return $failed > 0 ? Command::FAILURE : Command::SUCCESS;
+        return Command::SUCCESS;
     }
 }

@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Builder;
 use Carbon\Carbon;
+use App\Jobs\SendDocumentEmail;
+use Illuminate\Support\Facades\DB;
 
 class RecurringInvoice extends Model
 {
@@ -148,13 +150,16 @@ class RecurringInvoice extends Model
     {
         $date = $this->next_invoice_date ?? Carbon::parse($this->start_date);
         
+        // NoOverflow: Jan 31 + 1 month is Feb 28/29, not Mar 3 (which would drift forever).
+        $date = $date->copy();
+
         return match($this->billing_cycle) {
             self::CYCLE_WEEKLY => $date->addWeek(),
-            self::CYCLE_MONTHLY => $date->addMonth(),
-            self::CYCLE_QUARTERLY => $date->addMonths(3),
-            self::CYCLE_SEMI_ANNUAL => $date->addMonths(6),
-            self::CYCLE_ANNUAL => $date->addYear(),
-            default => $date->addMonth(),
+            self::CYCLE_MONTHLY => $date->addMonthNoOverflow(),
+            self::CYCLE_QUARTERLY => $date->addMonthsNoOverflow(3),
+            self::CYCLE_SEMI_ANNUAL => $date->addMonthsNoOverflow(6),
+            self::CYCLE_ANNUAL => $date->addYearNoOverflow(),
+            default => $date->addMonthNoOverflow(),
         };
     }
 
@@ -175,7 +180,44 @@ class RecurringInvoice extends Model
         return $this->next_invoice_date->lte(now());
     }
 
+    /**
+     * Generate the next invoice. Runs in a transaction with the schedule row locked, so a
+     * failure part-way can't leave an invoice without its schedule advancing (which would
+     * bill the client twice on the next run) and concurrent runs can't both generate.
+     * With auto_send, the invoice is actually emailed (previously it was only marked sent).
+     */
     public function generateInvoice(): ?Invoice
+    {
+        $invoice = DB::transaction(function () {
+            $fresh = static::withoutGlobalScope('company')->whereKey($this->id)->lockForUpdate()->first();
+
+            if (! $fresh) {
+                return null;
+            }
+
+            // Carry over an in-memory next_invoice_date override (used by "generate now").
+            if ($this->isDirty('next_invoice_date')) {
+                $fresh->next_invoice_date = $this->next_invoice_date;
+            }
+
+            $invoice = $fresh->generateInvoiceLocked();
+            $this->setRawAttributes($fresh->getAttributes(), true);
+
+            return $invoice;
+        });
+
+        if ($invoice && $this->auto_send) {
+            $invoice->loadMissing('client');
+            if ($invoice->client?->email) {
+                SendDocumentEmail::dispatch($invoice);
+                $invoice->markAsSent();
+            }
+        }
+
+        return $invoice;
+    }
+
+    private function generateInvoiceLocked(): ?Invoice
     {
         if (!$this->shouldGenerateInvoice()) {
             return null;
@@ -229,10 +271,6 @@ class RecurringInvoice extends Model
         }
 
         $this->save();
-
-        if ($this->auto_send && $invoice->status === 'draft') {
-            $invoice->markAsSent();
-        }
 
         return $invoice;
     }
