@@ -158,9 +158,11 @@ Route::middleware(['auth', 'tenant', 'verified', \App\Http\Middleware\CheckOnboa
     Route::get('/receipts', [App\Http\Controllers\ReceiptController::class, 'index'])->name('receipts.index');
     Route::get('/receipts/{receipt}', [App\Http\Controllers\ReceiptController::class, 'show'])->name('receipts.show');
     Route::get('/receipts/{receipt}/download', [App\Http\Controllers\ReceiptController::class, 'download'])->name('receipts.download');
+    Route::get('/receipts/{receipt}/preview', [App\Http\Controllers\ReceiptController::class, 'preview'])->name('receipts.preview');
 
     // Expenses
     Route::resource('expenses', ExpenseController::class);
+    Route::get('/expenses/{expense}/receipt', [ExpenseController::class, 'receipt'])->name('expenses.receipt');
 
     // Reports
     Route::get('/reports', [App\Http\Controllers\ReportController::class, 'index'])->name('reports.index');

@@ -2,178 +2,171 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Client;
+use App\Models\Expense;
 use App\Models\Invoice;
 use App\Models\Payment;
-use App\Models\Client;
-use App\Models\Product;
-use App\Models\Expense;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
 
 class ReportController extends Controller
 {
+    public const RANGES = [
+        'this_month' => 'This month',
+        'last_month' => 'Last month',
+        'this_quarter' => 'This quarter',
+        'last_quarter' => 'Last quarter',
+        'this_year' => 'This year',
+        'last_year' => 'Last year',
+        'last_30_days' => 'Last 30 days',
+        'last_12_months' => 'Last 12 months',
+        'custom' => 'Custom range',
+    ];
+
     public function index(Request $request)
     {
         $company = auth()->user()->company;
-        $dateRange = $request->get('date_range', 'this_month');
-        $dates = $this->getDateRange($dateRange);
+        $range = array_key_exists($request->get('date_range'), self::RANGES) ? $request->get('date_range') : 'this_month';
+        [$start, $end] = $this->dateRange($range, $request);
+        [$prevStart, $prevEnd] = [(clone $start)->sub($start->diff($end))->subSecond(), (clone $start)->subSecond()];
 
-        // Invoice Summary
-        $invoiceStats = [
-            'total' => Invoice::count(),
-            'paid' => Invoice::where('status', 'paid')->count(),
-            'pending' => Invoice::whereIn('status', ['sent', 'viewed'])->count(),
-            'overdue' => Invoice::where('status', 'overdue')->count(),
-            'draft' => Invoice::where('status', 'draft')->count(),
-        ];
+        // Revenue = money actually collected (completed payments, net of refunds), so partial
+        // payments and refunds are reflected. Previously: totals of fully-paid invoices only.
+        $collected = fn ($from, $to) => (float) Payment::whereIn('status', ['completed', 'partially_refunded', 'refunded'])
+            ->whereBetween('payment_date', [$from, $to])
+            ->sum(DB::raw('amount - COALESCE(refunded_amount, 0)'));
+        $spent = fn ($from, $to) => (float) Expense::whereBetween('expense_date', [$from->toDateString(), $to->toDateString()])
+            ->sum(DB::raw('amount + COALESCE(tax_amount, 0)'));
 
-        $invoiceAmounts = [
-            'total' => Invoice::sum('total'),
-            'paid' => Invoice::where('status', 'paid')->sum('total'),
-            'outstanding' => Invoice::whereIn('status', ['sent', 'viewed', 'overdue'])->sum('total'),
-        ];
+        $revenue = $collected($start, $end);
+        $expenses = $spent($start, $end);
+        $prevRevenue = $collected($prevStart, $prevEnd);
+        $prevExpenses = $spent($prevStart, $prevEnd);
+        $profit = $revenue - $expenses;
 
-        // Period Stats
-        $periodInvoices = Invoice::whereBetween('issue_date', [$dates['start'], $dates['end']])->count();
-        $periodRevenue = Invoice::where('status', 'paid')
-            ->whereBetween('paid_at', [$dates['start'], $dates['end']])
-            ->sum('total');
+        $invoiced = (float) Invoice::whereBetween('issue_date', [$start->toDateString(), $end->toDateString()])
+            ->where('status', '!=', 'cancelled')->sum('total');
 
-        // Payment Stats
-        $totalPayments = Payment::where('status', 'completed')->sum('amount');
-        $periodPayments = Payment::where('status', 'completed')
-            ->whereBetween('payment_date', [$dates['start'], $dates['end']])
-            ->sum('amount');
-
-        // Client Stats
-        $totalClients = Client::count();
-        $newClients = Client::whereBetween('created_at', [$dates['start'], $dates['end']])->count();
-
-        // Top Clients by Revenue
-        $topClients = Invoice::where('status', 'paid')
-            ->select('client_id', DB::raw('SUM(total) as total_revenue'), DB::raw('COUNT(*) as invoice_count'))
-            ->groupBy('client_id')
-            ->orderByDesc('total_revenue')
-            ->limit(10)
-            ->with('client:id,name,email')
-            ->get();
-
-        // Revenue by Month (last 12 months)
-        $revenueByMonth = Invoice::where('status', 'paid')
-            ->where('paid_at', '>=', now()->subMonths(12))
-            ->select(
-                DB::raw('YEAR(paid_at) as year'),
-                DB::raw('MONTH(paid_at) as month'),
-                DB::raw('SUM(total) as total')
-            )
-            ->groupBy('year', 'month')
-            ->orderBy('year')
-            ->orderBy('month')
-            ->get();
-
-        // Invoices by Status (for pie chart data)
-        $invoicesByStatus = [
-            ['status' => 'Paid', 'count' => $invoiceStats['paid'], 'color' => '#10b981'],
-            ['status' => 'Pending', 'count' => $invoiceStats['pending'], 'color' => '#f59e0b'],
-            ['status' => 'Overdue', 'count' => $invoiceStats['overdue'], 'color' => '#ef4444'],
-            ['status' => 'Draft', 'count' => $invoiceStats['draft'], 'color' => '#6b7280'],
-        ];
-
-        // Payment Methods Breakdown
-        $paymentMethods = Payment::where('status', 'completed')
-            ->select('payment_method', DB::raw('COUNT(*) as count'), DB::raw('SUM(amount) as total'))
-            ->groupBy('payment_method')
-            ->get();
-
-        // Expenses
-        $totalExpenses = Expense::sum(DB::raw('amount + tax_amount'));
-        $periodExpenses = Expense::whereBetween('expense_date', [$dates['start'], $dates['end']])
-            ->sum(DB::raw('amount + tax_amount'));
-
-        $expensesByCategory = Expense::whereBetween('expense_date', [$dates['start'], $dates['end']])
-            ->select('category', DB::raw('SUM(amount + tax_amount) as total'), DB::raw('COUNT(*) as count'))
-            ->groupBy('category')
-            ->orderByDesc('total')
-            ->get()
-            ->map(function ($row) {
-                $row->label = Expense::categories()[$row->category] ?? ucfirst($row->category);
-                return $row;
-            });
-
-        $expensesByMonth = Expense::where('expense_date', '>=', now()->subMonths(12))
-            ->select(
-                DB::raw('YEAR(expense_date) as year'),
-                DB::raw('MONTH(expense_date) as month'),
-                DB::raw('SUM(amount + tax_amount) as total')
-            )
-            ->groupBy('year', 'month')
-            ->orderBy('year')->orderBy('month')
-            ->get();
-
-        // Profit (period)
-        $periodProfit = (float) $periodRevenue - (float) $periodExpenses;
-        $profitMargin = $periodRevenue > 0 ? ($periodProfit / $periodRevenue) * 100 : 0;
-
-        // Top Products
-        $topProducts = DB::table('invoice_items')
-            ->join('invoices', 'invoice_items.invoice_id', '=', 'invoices.id')
-            ->where('invoices.company_id', $company->id)
-            ->where('invoices.status', 'paid')
-            ->select('invoice_items.name', DB::raw('SUM(invoice_items.quantity) as quantity_sold'), DB::raw('SUM(invoice_items.quantity * invoice_items.price) as revenue'))
-            ->groupBy('invoice_items.name')
-            ->orderByDesc('revenue')
-            ->limit(10)
-            ->get();
-
-        return view('reports.index', compact(
-            'dateRange',
-            'invoiceStats',
-            'invoiceAmounts',
-            'periodInvoices',
-            'periodRevenue',
-            'totalPayments',
-            'periodPayments',
-            'totalClients',
-            'newClients',
-            'topClients',
-            'revenueByMonth',
-            'invoicesByStatus',
-            'paymentMethods',
-            'topProducts',
-            'totalExpenses',
-            'periodExpenses',
-            'expensesByCategory',
-            'expensesByMonth',
-            'periodProfit',
-            'profitMargin'
-        ));
+        return Inertia::render('Reports/Index', [
+            'range' => $range,
+            'ranges' => self::RANGES,
+            'period' => ['start' => $start->toDateString(), 'end' => $end->toDateString()],
+            'kpis' => [
+                'revenue' => $revenue,
+                'revenue_trend' => $this->trend($revenue, $prevRevenue),
+                'expenses' => $expenses,
+                'expenses_trend' => $this->trend($expenses, $prevExpenses),
+                'profit' => $profit,
+                'margin' => $revenue > 0 ? round($profit / $revenue * 100, 1) : null,
+                'invoiced' => $invoiced,
+                'invoices_issued' => Invoice::whereBetween('issue_date', [$start->toDateString(), $end->toDateString()])->count(),
+                'new_clients' => Client::whereBetween('created_at', [$start, $end])->count(),
+                'outstanding' => (float) Invoice::whereIn('status', ['sent', 'viewed', 'partial', 'overdue'])->sum(DB::raw('total - COALESCE(paid_amount, 0)')),
+                'overdue' => (float) Invoice::where('status', 'overdue')->sum(DB::raw('total - COALESCE(paid_amount, 0)')),
+            ],
+            'monthly' => $this->monthly(),
+            'aging' => $this->aging(),
+            'topClients' => Payment::whereIn('status', ['completed', 'partially_refunded'])
+                ->whereBetween('payment_date', [$start, $end])
+                ->select('client_id', DB::raw('SUM(amount - COALESCE(refunded_amount, 0)) as revenue'), DB::raw('COUNT(*) as payments'))
+                ->groupBy('client_id')->orderByDesc('revenue')->limit(8)
+                ->with('client:id,name,company_name,client_type')->get()
+                ->map(fn ($r) => ['id' => $r->client_id, 'name' => $r->client?->bill_to_name ?? 'Unknown', 'revenue' => (float) $r->revenue, 'payments' => (int) $r->payments]),
+            'topProducts' => DB::table('invoice_items')
+                ->join('invoices', 'invoice_items.invoice_id', '=', 'invoices.id')
+                ->where('invoices.company_id', $company->id)
+                ->whereNotIn('invoices.status', ['draft', 'cancelled'])
+                ->whereBetween('invoices.issue_date', [$start->toDateString(), $end->toDateString()])
+                ->select('invoice_items.name', DB::raw('SUM(invoice_items.quantity) as quantity'), DB::raw('SUM(invoice_items.quantity * invoice_items.price) as revenue'))
+                ->groupBy('invoice_items.name')->orderByDesc('revenue')->limit(8)->get()
+                ->map(fn ($r) => ['name' => $r->name, 'quantity' => (float) $r->quantity, 'revenue' => (float) $r->revenue]),
+            'paymentMethods' => Payment::where('status', 'completed')->whereBetween('payment_date', [$start, $end])
+                ->select('payment_method', DB::raw('COUNT(*) as count'), DB::raw('SUM(amount) as total'))
+                ->groupBy('payment_method')->orderByDesc('total')->get()
+                ->map(fn ($r) => ['method' => Payment::paymentMethods()[$r->payment_method] ?? ucwords(str_replace('_', ' ', $r->payment_method)), 'count' => (int) $r->count, 'total' => (float) $r->total]),
+            'expensesByCategory' => Expense::whereBetween('expense_date', [$start->toDateString(), $end->toDateString()])
+                ->select('category', DB::raw('SUM(amount + COALESCE(tax_amount, 0)) as total'))
+                ->groupBy('category')->orderByDesc('total')->get()
+                ->map(fn ($r) => ['category' => Expense::categories()[$r->category] ?? ucfirst($r->category), 'total' => (float) $r->total]),
+        ]);
     }
 
-    protected function getDateRange($range): array
+    /** Collected revenue, expenses and profit for each of the last 12 months. */
+    private function monthly(): array
     {
-        switch ($range) {
-            case 'today':
-                return ['start' => now()->startOfDay(), 'end' => now()->endOfDay()];
-            case 'yesterday':
-                return ['start' => now()->subDay()->startOfDay(), 'end' => now()->subDay()->endOfDay()];
-            case 'this_week':
-                return ['start' => now()->startOfWeek(), 'end' => now()->endOfWeek()];
-            case 'last_week':
-                return ['start' => now()->subWeek()->startOfWeek(), 'end' => now()->subWeek()->endOfWeek()];
-            case 'this_month':
-                return ['start' => now()->startOfMonth(), 'end' => now()->endOfMonth()];
-            case 'last_month':
-                return ['start' => now()->subMonth()->startOfMonth(), 'end' => now()->subMonth()->endOfMonth()];
-            case 'this_quarter':
-                return ['start' => now()->startOfQuarter(), 'end' => now()->endOfQuarter()];
-            case 'last_quarter':
-                return ['start' => now()->subQuarter()->startOfQuarter(), 'end' => now()->subQuarter()->endOfQuarter()];
-            case 'this_year':
-                return ['start' => now()->startOfYear(), 'end' => now()->endOfYear()];
-            case 'last_year':
-                return ['start' => now()->subYear()->startOfYear(), 'end' => now()->subYear()->endOfYear()];
-            default:
-                return ['start' => now()->startOfMonth(), 'end' => now()->endOfMonth()];
+        $from = now()->subMonthsNoOverflow(11)->startOfMonth();
+
+        $rev = Payment::whereIn('status', ['completed', 'partially_refunded', 'refunded'])->where('payment_date', '>=', $from)
+            ->selectRaw("DATE_FORMAT(payment_date, '%Y-%m') as ym, SUM(amount - COALESCE(refunded_amount, 0)) as total")
+            ->groupBy('ym')->pluck('total', 'ym');
+        $exp = Expense::where('expense_date', '>=', $from->toDateString())
+            ->selectRaw("DATE_FORMAT(expense_date, '%Y-%m') as ym, SUM(amount + COALESCE(tax_amount, 0)) as total")
+            ->groupBy('ym')->pluck('total', 'ym');
+
+        return collect(range(0, 11))->map(function ($i) use ($from, $rev, $exp) {
+            $m = (clone $from)->addMonthsNoOverflow($i);
+            $key = $m->format('Y-m');
+            $r = round((float) ($rev[$key] ?? 0), 2);
+            $e = round((float) ($exp[$key] ?? 0), 2);
+
+            return ['month' => $m->format('M'), 'label' => $m->format('M Y'), 'revenue' => $r, 'expenses' => $e, 'profit' => round($r - $e, 2)];
+        })->all();
+    }
+
+    /** Outstanding balances bucketed by days past due. */
+    private function aging(): array
+    {
+        $buckets = ['current' => 0.0, '1_30' => 0.0, '31_60' => 0.0, '61_90' => 0.0, '90_plus' => 0.0];
+        $today = now()->startOfDay();
+
+        Invoice::whereIn('status', ['sent', 'viewed', 'partial', 'overdue'])
+            ->get(['id', 'due_date', 'total', 'paid_amount'])
+            ->each(function ($inv) use (&$buckets, $today) {
+                $balance = max(0, (float) $inv->total - (float) $inv->paid_amount);
+                $days = $inv->due_date ? (int) $inv->due_date->diffInDays($today, false) : 0;
+                $key = $days <= 0 ? 'current' : ($days <= 30 ? '1_30' : ($days <= 60 ? '31_60' : ($days <= 90 ? '61_90' : '90_plus')));
+                $buckets[$key] += $balance;
+            });
+
+        return array_map(fn ($v) => round($v, 2), $buckets);
+    }
+
+    private function trend(float $current, float $previous): ?float
+    {
+        if ($previous <= 0) {
+            return $current > 0 ? 100.0 : null;
         }
+
+        return round(($current - $previous) / $previous * 100, 1);
+    }
+
+    /** @return array{0: Carbon, 1: Carbon} */
+    protected function dateRange(string $range, Request $request): array
+    {
+        $now = now();
+
+        // NoOverflow variants: on the 29th–31st, subMonth() lands in the *current* month
+        // (e.g. Mar 31 - 1 month = Mar 3), so "last month" showed this month.
+        return match ($range) {
+            'last_month' => [$now->copy()->subMonthNoOverflow()->startOfMonth(), $now->copy()->subMonthNoOverflow()->endOfMonth()],
+            'this_quarter' => [$now->copy()->startOfQuarter(), $now->copy()->endOfQuarter()],
+            'last_quarter' => [$now->copy()->startOfQuarter()->subMonthsNoOverflow(3), $now->copy()->startOfQuarter()->subDay()->endOfDay()],
+            'this_year' => [$now->copy()->startOfYear(), $now->copy()->endOfYear()],
+            'last_year' => [$now->copy()->subYearNoOverflow()->startOfYear(), $now->copy()->subYearNoOverflow()->endOfYear()],
+            'last_30_days' => [$now->copy()->subDays(29)->startOfDay(), $now->copy()->endOfDay()],
+            'last_12_months' => [$now->copy()->subMonthsNoOverflow(11)->startOfMonth(), $now->copy()->endOfMonth()],
+            'custom' => $this->customRange($request),
+            default => [$now->copy()->startOfMonth(), $now->copy()->endOfMonth()],
+        };
+    }
+
+    private function customRange(Request $request): array
+    {
+        $from = rescue(fn () => Carbon::parse($request->get('from'))->startOfDay(), now()->startOfMonth(), false);
+        $to = rescue(fn () => Carbon::parse($request->get('to'))->endOfDay(), now()->endOfDay(), false);
+
+        return $from->lte($to) ? [$from, $to] : [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
     }
 }

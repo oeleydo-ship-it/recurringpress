@@ -57,7 +57,11 @@ class Receipt extends Model
     public static function generateReceiptNumber(int $companyId): string
     {
         $prefix = 'RCP-';
-        
+
+        // Serialise numbering per company (callers run inside a transaction). Without this
+        // lock concurrent payments produced duplicate receipt numbers.
+        \Illuminate\Support\Facades\DB::table('companies')->where('id', $companyId)->lockForUpdate()->first();
+
         $lastReceipt = self::withoutGlobalScopes()
             ->where('company_id', $companyId)
             ->orderBy('id', 'desc')

@@ -21,6 +21,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'honeypot' => \App\Http\Middleware\ProtectAgainstSpam::class,
         ]);
 
+        // Stripe calls the webhook server-to-server without a CSRF token; it is authenticated
+        // by its signature instead (PaymentController::handleWebhook). Without this every
+        // webhook was rejected with 419.
+        $middleware->preventRequestForgery(except: ['stripe/webhook']);
+
         $middleware->web(append: [
             \App\Http\Middleware\CheckInstallation::class,
             \App\Http\Middleware\DetectPendingInstall::class,

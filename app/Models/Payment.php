@@ -112,7 +112,8 @@ class Payment extends Model
 
     public function canRefund(): bool
     {
-        return $this->status === self::STATUS_COMPLETED && 
+        // Partially refunded payments can be refunded further, up to the original amount.
+        return in_array($this->status, [self::STATUS_COMPLETED, self::STATUS_PARTIALLY_REFUNDED], true) &&
                $this->amount > $this->refunded_amount;
     }
 
