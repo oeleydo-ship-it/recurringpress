@@ -280,8 +280,5 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
 });
 
 // Public CMS Page Route (handles about, contact, and other pages)
-Route::get('/page/{slug}', function ($slug) {
-    $page = \App\Models\CmsPage::where('slug', $slug)->where('is_published', true)->firstOrFail();
-    return view('page', compact('page'));
-})->name('page.show');
+Route::get('/page/{slug}', [LandingController::class, 'page'])->name('page.show');
 
