@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\CompanySetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
 
 class CompanyController extends Controller
 {
@@ -15,14 +16,20 @@ class CompanyController extends Controller
             return redirect()->route('dashboard');
         }
 
-        return view('company.create');
+        return Inertia::render('Company/Create');
     }
 
     public function store(Request $request)
     {
+        // Only users without a company may create one (previously any member could move
+        // themselves into a brand-new company by posting here).
+        if (auth()->user()->company_id) {
+            return redirect()->route('dashboard');
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'nullable|email|max:255',
+            'email' => 'nullable|email:rfc,filter|max:255',
             'phone' => 'nullable|string|max:50',
         ]);
 

@@ -2,173 +2,192 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\SubscriptionPlan;
-use App\Models\SystemSetting;
-use Stripe\Stripe;
+use App\Services\StripeGateway;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Inertia\Inertia;
 use Stripe\PaymentIntent;
+use Stripe\Stripe;
 
 class SubscriptionController extends Controller
 {
     public function index()
     {
-        $company = auth()->user()->company;
-        $company->load('subscriptionPlan');
-
-        // Get current plan or default to free plan
+        $company = auth()->user()->company->load('subscriptionPlan');
         $currentPlan = $company->subscriptionPlan;
 
-        if (!$currentPlan) {
+        if (! $currentPlan) {
             $currentPlan = SubscriptionPlan::where('slug', 'free')->first();
 
-            // Auto-link company to free plan if not set
-            if ($currentPlan && !$company->subscription_plan_id) {
+            if ($currentPlan && ! $company->subscription_plan_id) {
                 $company->update(['subscription_plan_id' => $currentPlan->id]);
             }
         }
 
-        // Load all available plans for upgrade/downgrade
-        $plans = SubscriptionPlan::active()->ordered()->get();
-
-        return view('settings.subscription', compact('company', 'currentPlan', 'plans'));
+        return Inertia::render('Settings/Subscription', [
+            'currentPlanId' => $currentPlan?->id,
+            'status' => $company->subscription_status,
+            'endsAt' => $company->subscription_ends_at?->toDateString(),
+            'plans' => SubscriptionPlan::active()->ordered()->get()->map(fn ($p) => $this->planPayload($p)),
+            'usage' => [
+                'invoices' => $company->invoices()->count(),
+                'clients' => $company->clients()->count(),
+                'users' => $company->users()->count(),
+                'products' => $company->products()->count(),
+            ],
+            'canPayOnline' => $this->platformReady(),
+        ]);
     }
 
     public function changePlan(Request $request, SubscriptionPlan $plan)
     {
-        $company = auth()->user()->company;
-        $currentPlan = $company->subscriptionPlan;
+        // Only publicly offered plans (previously any plan id, including inactive ones).
+        abort_unless($plan->is_active, 404);
 
-        // For free plans, just switch immediately
-        if ($plan->price <= 0) {
+        $company = auth()->user()->company;
+
+        if ((float) $plan->price <= 0) {
             $company->update([
                 'subscription_plan_id' => $plan->id,
                 'subscription_status' => 'active',
+                'subscription_ends_at' => null,
             ]);
 
             return redirect()->route('settings.subscription')
-                ->with('success', 'Successfully switched to ' . $plan->name . ' plan.');
+                ->with('success', 'Switched to the ' . $plan->name . ' plan.');
         }
 
-        // For paid plans, redirect to payment page
         return redirect()->route('settings.subscription.payment', $plan);
     }
 
     public function showPaymentForm(SubscriptionPlan $plan)
     {
-        $company = auth()->user()->company;
+        abort_unless($plan->is_active && (float) $plan->price > 0, 404);
 
-        // Ensure platform Stripe is configured
-        if (!$this->hasPlatformStripeCredentials()) {
+        if (! $this->platformReady()) {
             return redirect()->route('settings.subscription')
-                ->with('error', 'Payment gateway is not configured. Please contact support.');
+                ->with('error', 'Online payment is not configured. Please contact support.');
         }
 
-        $stripeKey = $this->getPlatformStripePublishableKey();
-
-        return view('settings.subscription-payment', compact('plan', 'company', 'stripeKey'));
+        return Inertia::render('Settings/SubscriptionPayment', [
+            'plan' => $this->planPayload($plan),
+            'stripeKey' => StripeGateway::publishableKey(null),
+            'intentUrl' => route('settings.subscription.intent', $plan),
+            'returnUrl' => route('settings.subscription.success', $plan),
+        ]);
     }
 
     public function createPaymentIntent(SubscriptionPlan $plan)
     {
-        if (!$this->hasPlatformStripeCredentials()) {
+        if (! $plan->is_active || (float) $plan->price <= 0) {
+            return response()->json(['error' => 'This plan is not available.'], 404);
+        }
+
+        if (! $this->platformReady()) {
             return response()->json(['error' => 'Payment gateway not configured'], 400);
         }
 
-        Stripe::setApiKey($this->getPlatformStripeSecretKey());
+        Stripe::setApiKey(StripeGateway::secretKey(null));
 
         try {
             $company = auth()->user()->company;
 
             $paymentIntent = PaymentIntent::create([
-                'amount' => (int) round($plan->price * 100),
-                'currency' => 'usd', // Default to USD for subscriptions for now, or fetch from system settings
+                'amount' => $this->amountInCents($plan),
+                'currency' => 'usd',
+                'description' => "Subscription: {$plan->name}",
                 'metadata' => [
+                    'type' => 'subscription_upgrade',
                     'company_id' => $company->id,
                     'plan_id' => $plan->id,
-                    'type' => 'subscription_upgrade'
                 ],
             ]);
 
             return response()->json([
                 'clientSecret' => $paymentIntent->client_secret,
-                'publishableKey' => $this->getPlatformStripePublishableKey(),
+                'publishableKey' => StripeGateway::publishableKey(null),
             ]);
-        } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+        } catch (\Throwable $e) {
+            Log::error('Subscription PaymentIntent failed', ['plan_id' => $plan->id, 'error' => $e->getMessage()]);
+
+            return response()->json(['error' => 'Could not start the payment. Please try again.'], 500);
         }
     }
 
+    /**
+     * Stripe redirects here after confirmation. Previously ANY succeeded PaymentIntent upgraded
+     * the company to whatever plan was in the URL (the metadata check ran after the upgrade
+     * and did nothing), so paying for the cheapest plan once unlocked every plan. The intent
+     * must now belong to this company and plan, and the amount paid must cover the price.
+     */
     public function handlePaymentSuccess(Request $request, SubscriptionPlan $plan)
     {
-        $paymentIntentId = $request->input('payment_intent');
+        $paymentIntentId = (string) $request->input('payment_intent');
 
-        if (!$paymentIntentId) {
+        if (! str_starts_with($paymentIntentId, 'pi_') || ! $this->platformReady()) {
             return redirect()->route('settings.subscription')->with('error', 'Payment verification failed.');
         }
 
-        Stripe::setApiKey($this->getPlatformStripeSecretKey());
+        Stripe::setApiKey(StripeGateway::secretKey(null));
 
         try {
-            $paymentIntent = PaymentIntent::retrieve($paymentIntentId);
+            $intent = PaymentIntent::retrieve($paymentIntentId);
+        } catch (\Throwable $e) {
+            Log::warning('Subscription payment verification failed', ['error' => $e->getMessage()]);
 
-            if ($paymentIntent->status === 'succeeded') {
-                $company = auth()->user()->company;
-
-                // Update company plan
-                $company->update([
-                    'subscription_plan_id' => $plan->id,
-                    'subscription_status' => 'active',
-                    'subscription_started_at' => now(),
-                    // 'subscription_ends_at' => now()->addMonth(), // If we were tracking expiration
-                ]);
-
-                // Verify if metadata matches (optional but good security)
-                if (
-                    $paymentIntent->metadata->company_id != $company->id ||
-                    $paymentIntent->metadata->plan_id != $plan->id
-                ) {
-                    // Log mismatch warning?
-                }
-
-                return redirect()->route('settings.subscription')
-                    ->with('success', 'Payment successful! You have been upgraded to the ' . $plan->name . ' plan.');
-            }
-        } catch (\Exception $e) {
-            return redirect()->route('settings.subscription.payment', $plan)
-                ->with('error', 'Payment verification failed: ' . $e->getMessage());
+            return redirect()->route('settings.subscription.payment', $plan)->with('error', 'Payment verification failed.');
         }
 
-        return redirect()->route('settings.subscription')->with('error', 'Payment was not successful.');
-    }
+        $company = auth()->user()->company;
+        $valid = $intent->status === 'succeeded'
+            && ($intent->metadata->type ?? null) === 'subscription_upgrade'
+            && (int) ($intent->metadata->company_id ?? 0) === $company->id
+            && (int) ($intent->metadata->plan_id ?? 0) === $plan->id
+            && (int) $intent->amount_received >= $this->amountInCents($plan)
+            && strtolower((string) $intent->currency) === 'usd';
 
-    // Helper methods for Platform Stripe Keys (duplicated from PublicInvoiceController logic, could be trait)
-    protected function hasPlatformStripeCredentials(): bool
-    {
-        $stripeEnabled = SystemSetting::get('stripe_enabled');
-        if (!$stripeEnabled) {
-            return false;
+        if (! $valid) {
+            Log::warning('Rejected subscription payment', [
+                'company_id' => $company->id,
+                'plan_id' => $plan->id,
+                'intent' => $intent->id,
+                'status' => $intent->status,
+                'metadata' => (array) $intent->metadata?->toArray(),
+            ]);
+
+            return redirect()->route('settings.subscription')->with('error', 'This payment could not be verified for the selected plan.');
         }
 
-        $mode = SystemSetting::get('stripe_mode', 'test');
+        $company->update([
+            'subscription_plan_id' => $plan->id,
+            'subscription_status' => 'active',
+            'subscription_started_at' => now(),
+            'subscription_ends_at' => $plan->billing_cycle === 'yearly' ? now()->addYearNoOverflow() : now()->addMonthNoOverflow(),
+        ]);
 
-        if ($mode === 'live') {
-            return !empty(SystemSetting::get('stripe_live_secret_key')) &&
-                !empty(SystemSetting::get('stripe_live_publishable_key'));
-        }
-
-        return !empty(SystemSetting::get('stripe_test_secret_key')) &&
-            !empty(SystemSetting::get('stripe_test_publishable_key'));
+        return redirect()->route('settings.subscription')
+            ->with('success', 'Payment received — you are now on the ' . $plan->name . ' plan.');
     }
 
-    protected function getPlatformStripeSecretKey(): ?string
+    /* ------------------------------------------------------------------ */
+
+    private function platformReady(): bool
     {
-        $mode = SystemSetting::get('stripe_mode', 'test');
-        return $mode === 'live' ? SystemSetting::get('stripe_live_secret_key') : SystemSetting::get('stripe_test_secret_key');
+        return filled(StripeGateway::secretKey(null)) && filled(StripeGateway::publishableKey(null));
     }
 
-    protected function getPlatformStripePublishableKey(): ?string
+    private function amountInCents(SubscriptionPlan $plan): int
     {
-        $mode = SystemSetting::get('stripe_mode', 'test');
-        return $mode === 'live' ? SystemSetting::get('stripe_live_publishable_key') : SystemSetting::get('stripe_test_publishable_key');
+        return (int) round((float) $plan->price * 100);
+    }
+
+    private function planPayload(SubscriptionPlan $p): array
+    {
+        return [
+            ...$p->only('id', 'name', 'slug', 'description', 'billing_cycle', 'max_invoices', 'max_clients', 'max_users', 'max_products', 'custom_branding', 'stripe_enabled', 'is_popular'),
+            'price' => (float) $p->price,
+            'features' => $p->features ?? [],
+        ];
     }
 }

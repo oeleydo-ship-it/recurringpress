@@ -18,7 +18,7 @@ function layoutFor(name) {
     if (name.startsWith('Marketing/')) return MarketingLayout;
     if (name.startsWith('Superadmin/Auth/')) return AuthLayout;
     if (name.startsWith('Superadmin/')) return SuperadminLayout;
-    if (name.startsWith('Public/') || name.startsWith('Onboarding/') || name.startsWith('Errors/')) return null;
+    if (['Public/', 'Onboarding/', 'Errors/', 'Company/'].some((p) => name.startsWith(p))) return null;
     return AppLayout;
 }
 

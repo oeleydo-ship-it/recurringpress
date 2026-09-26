@@ -9,38 +9,68 @@ use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
+use Inertia\Inertia;
 
 class SettingsController extends Controller
 {
+    private const HEX = 'regex:/^#[0-9a-fA-F]{6}$/';
+
     public function index()
     {
         $company = auth()->user()->company;
-        $settings = $company->settings ?? CompanySetting::create(['company_id' => $company->id]);
-        $currencies = CompanySetting::currencies();
-        $dateFormats = CompanySetting::dateFormats();
-        $invoiceTemplates = CompanySetting::invoiceTemplates();
-        $colorPresets = CompanySetting::colorPresets();
-        $fontFamilies = CompanySetting::fontFamilies();
-        $fontSizes = CompanySetting::fontSizes();
+        $settings = $this->settings();
 
-        return view('settings.index', compact('company', 'settings', 'currencies', 'dateFormats', 'invoiceTemplates', 'colorPresets', 'fontFamilies', 'fontSizes'));
+        return Inertia::render('Settings/Index', [
+            'company' => [
+                ...$company->only(['name', 'email', 'phone', 'website', 'tax_number', 'address', 'city', 'state', 'postal_code', 'country', 'currency',
+                    'invoice_prefix', 'invoice_start_number', 'payment_terms', 'invoice_footer', 'quotation_prefix', 'quotation_validity_days']),
+                'logo_url' => $company->logo_url,
+                'signature_url' => $company->signature_url,
+            ],
+            'settings' => [
+                ...$settings->only([
+                    'date_format', 'timezone', 'tax_enabled', 'default_tax_rate', 'email_notifications', 'invoice_due_reminder', 'overdue_reminder',
+                    'show_logo_on_invoice', 'show_payment_instructions', 'payment_instructions', 'bank_name', 'bank_account_name', 'bank_account_number',
+                    'bank_routing_number', 'paypal_email', 'accept_bank_transfer', 'accept_cash', 'accept_stripe', 'payment_gateway_mode', 'stripe_enabled',
+                    'stripe_public_key', 'primary_color', 'secondary_color', 'sidebar_color', 'sidebar_text_color', 'invoice_template', 'font_family',
+                    'font_size', 'heading_color', 'text_color', 'default_notes', 'default_terms', 'show_authorized_signature', 'show_invoice_footer',
+                    'show_quotation_website', 'show_quotation_message', 'quotation_message',
+                ]),
+                // Secrets are never sent to the browser; only whether one is saved.
+                'has_stripe_secret' => filled($settings->stripe_secret_key),
+                'has_webhook_secret' => filled($settings->stripe_webhook_secret),
+            ],
+            'options' => [
+                'currencies' => CompanySetting::currencies(),
+                'dateFormats' => CompanySetting::dateFormats(),
+                'invoiceTemplates' => CompanySetting::invoiceTemplates(),
+                'colorPresets' => CompanySetting::colorPresets(),
+                'fontFamilies' => CompanySetting::fontFamilies(),
+                'fontSizes' => CompanySetting::fontSizes(),
+                'timezones' => \DateTimeZone::listIdentifiers(),
+            ],
+            'webhookUrl' => route('stripe.webhook'),
+        ]);
     }
 
     public function updateCompany(Request $request)
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'nullable|email|max:255',
+            'email' => 'nullable|email:rfc,filter|max:255',
             'phone' => 'nullable|string|max:50',
-            'website' => 'nullable|url|max:255',
+            // http(s) only — the plain url rule also accepts schemes like javascript:.
+            'website' => 'nullable|url:http,https|max:255',
             'tax_number' => 'nullable|string|max:100',
             'address' => 'nullable|string|max:500',
             'city' => 'nullable|string|max:100',
             'state' => 'nullable|string|max:100',
             'postal_code' => 'nullable|string|max:20',
             'country' => 'nullable|string|max:100',
-            'currency' => 'required|string|max:10',
-            'logo' => 'nullable|image|max:2048',
+            'currency' => ['required', Rule::in(array_keys(CompanySetting::currencies()))],
+            'logo' => 'nullable|image|mimes:jpg,jpeg,png,webp,gif|max:2048',
+            'remove_logo' => 'boolean',
         ]);
 
         $company = auth()->user()->company;
@@ -50,30 +80,33 @@ class SettingsController extends Controller
                 Storage::disk('public')->delete($company->logo);
             }
             $validated['logo'] = $request->file('logo')->store('logos', 'public');
+        } elseif ($request->boolean('remove_logo') && $company->logo) {
+            Storage::disk('public')->delete($company->logo);
+            $validated['logo'] = null;
+        } else {
+            unset($validated['logo']);
         }
+        unset($validated['remove_logo']);
 
         $company->update($validated);
 
-        return back()->with('success', 'Company settings updated successfully.');
+        return back()->with('success', 'Company details saved.');
     }
 
     public function updateInvoice(Request $request)
     {
         $validated = $request->validate([
-            'invoice_prefix' => 'required|string|max:20',
-            'invoice_start_number' => 'required|integer|min:1',
+            'invoice_prefix' => 'required|string|max:20|regex:/^[A-Za-z0-9_\-\/#.]*$/',
+            'invoice_start_number' => 'required|integer|min:1|max:99999999',
             'payment_terms' => 'required|integer|min:0|max:365',
             'invoice_footer' => 'nullable|string|max:1000',
-            'authorized_signature' => 'nullable|image|max:2048',
+            'authorized_signature' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
             'show_authorized_signature' => 'boolean',
             'show_invoice_footer' => 'boolean',
         ]);
 
         $company = auth()->user()->company;
-
-        $companyFields = collect($validated)->only([
-            'invoice_prefix', 'invoice_start_number', 'payment_terms', 'invoice_footer',
-        ])->toArray();
+        $companyFields = collect($validated)->only(['invoice_prefix', 'invoice_start_number', 'payment_terms', 'invoice_footer'])->toArray();
 
         if ($request->hasFile('authorized_signature')) {
             if ($company->authorized_signature) {
@@ -83,63 +116,54 @@ class SettingsController extends Controller
         }
 
         $company->update($companyFields);
-
-        $settings = $company->settings ?? CompanySetting::create(['company_id' => $company->id]);
-        $settings->update([
+        $this->settings()->update([
             'show_authorized_signature' => $request->boolean('show_authorized_signature'),
             'show_invoice_footer' => $request->boolean('show_invoice_footer'),
         ]);
 
-        return back()->with('success', 'Invoice settings updated successfully.');
+        return back()->with('success', 'Invoice settings saved.');
     }
 
     public function updateQuotation(Request $request)
     {
         $validated = $request->validate([
-            'quotation_prefix' => 'required|string|max:20',
+            'quotation_prefix' => 'required|string|max:20|regex:/^[A-Za-z0-9_\-\/#.]*$/',
             'quotation_validity_days' => 'required|integer|min:0|max:365',
             'show_quotation_website' => 'boolean',
             'show_quotation_message' => 'boolean',
             'quotation_message' => 'nullable|string|max:1000',
         ]);
 
-        $company = auth()->user()->company;
-        $settings = $company->settings ?? CompanySetting::create(['company_id' => $company->id]);
-
-        $company->update([
+        auth()->user()->company->update([
             'quotation_prefix' => $validated['quotation_prefix'],
             'quotation_validity_days' => $validated['quotation_validity_days'],
         ]);
 
-        $settingsFields = collect($validated)->except(['quotation_prefix', 'quotation_validity_days'])->toArray();
-        $settingsFields['show_quotation_website'] = $request->boolean('show_quotation_website');
-        $settingsFields['show_quotation_message'] = $request->boolean('show_quotation_message');
+        $this->settings()->update([
+            'quotation_message' => $validated['quotation_message'] ?? null,
+            'show_quotation_website' => $request->boolean('show_quotation_website'),
+            'show_quotation_message' => $request->boolean('show_quotation_message'),
+        ]);
 
-        $settings->update($settingsFields);
-
-        return back()->with('success', 'Quotation settings updated successfully.');
+        return back()->with('success', 'Quotation settings saved.');
     }
 
     public function updatePreferences(Request $request)
     {
         $validated = $request->validate([
-            'date_format' => 'required|string',
-            'timezone' => 'required|string',
+            'date_format' => ['required', Rule::in(array_keys(CompanySetting::dateFormats()))],
+            'timezone' => 'required|timezone:all',
             'tax_enabled' => 'boolean',
             'default_tax_rate' => 'nullable|numeric|min:0|max:100',
             'email_notifications' => 'boolean',
             'invoice_due_reminder' => 'boolean',
             'overdue_reminder' => 'boolean',
-            'theme_color' => 'nullable|string|max:20',
             'show_logo_on_invoice' => 'boolean',
         ]);
 
-        $company = auth()->user()->company;
-        $settings = $company->settings ?? CompanySetting::create(['company_id' => $company->id]);
+        $this->settings()->update($validated);
 
-        $settings->update($validated);
-
-        return back()->with('success', 'Preferences updated successfully.');
+        return back()->with('success', 'Preferences saved.');
     }
 
     public function updatePayment(Request $request)
@@ -156,76 +180,83 @@ class SettingsController extends Controller
             'accept_cash' => 'boolean',
             'accept_stripe' => 'boolean',
             'payment_gateway_mode' => 'nullable|in:app,own',
-            'stripe_enabled' => 'boolean',
-            'stripe_public_key' => 'nullable|string|max:255',
-            'stripe_secret_key' => 'nullable|string|max:255',
-            'stripe_webhook_secret' => 'nullable|string|max:255',
+            'stripe_public_key' => 'nullable|string|max:255|starts_with:pk_',
+            'stripe_secret_key' => 'nullable|string|max:255|starts_with:sk_,rk_',
+            'stripe_webhook_secret' => 'nullable|string|max:255|starts_with:whsec_',
         ]);
 
-        $validated['accept_bank_transfer'] = $request->boolean('accept_bank_transfer');
-        $validated['accept_cash'] = $request->boolean('accept_cash');
-        $validated['accept_stripe'] = $request->boolean('accept_stripe');
+        foreach (['accept_bank_transfer', 'accept_cash', 'accept_stripe', 'show_payment_instructions'] as $flag) {
+            $validated[$flag] = $request->boolean($flag);
+        }
+        $validated['stripe_enabled'] = $validated['accept_stripe'];
 
-        $company = auth()->user()->company;
-        $settings = $company->settings ?? CompanySetting::create(['company_id' => $company->id]);
+        // Secrets are write-only: a blank field keeps the stored value.
+        foreach (['stripe_secret_key', 'stripe_webhook_secret'] as $secret) {
+            if (blank($validated[$secret] ?? null)) {
+                unset($validated[$secret]);
+            }
+        }
 
-        $settings->update($validated);
+        $this->settings()->update($validated);
 
-        return back()->with('success', 'Payment settings updated successfully.');
+        return back()->with('success', 'Payment settings saved.');
     }
 
     public function updateTheme(Request $request)
     {
         $validated = $request->validate([
-            'primary_color' => 'required|string|max:7',
-            'secondary_color' => 'required|string|max:7',
-            'sidebar_color' => 'required|string|max:7',
-            'sidebar_text_color' => 'required|string|max:7',
-            'invoice_template' => 'required|string|in:classic,modern,minimal,corporate,elegant,creative,professional,simple,bold,striped,tech,luxe',
-            'font_family' => 'required|string|in:Inter,Poppins,Roboto,Open Sans,Lato,Nunito',
-            'font_size' => 'required|string|in:small,base,large',
-            'heading_color' => 'nullable|string|max:7',
-            'text_color' => 'nullable|string|max:7',
+            // Hex only: these values are used in styles.
+            'primary_color' => ['required', self::HEX],
+            'secondary_color' => ['required', self::HEX],
+            'sidebar_color' => ['required', self::HEX],
+            'sidebar_text_color' => ['required', self::HEX],
+            'invoice_template' => ['required', Rule::in(array_keys(CompanySetting::invoiceTemplates()))],
+            'font_family' => ['required', Rule::in(array_keys(CompanySetting::fontFamilies()))],
+            'font_size' => ['required', Rule::in(array_keys(CompanySetting::fontSizes()))],
+            'heading_color' => ['nullable', self::HEX],
+            'text_color' => ['nullable', self::HEX],
         ]);
 
-        $company = auth()->user()->company;
-        $settings = $company->settings ?? CompanySetting::create(['company_id' => $company->id]);
+        $this->settings()->update($validated);
 
-        $settings->update($validated);
-
-        return back()->with('success', 'Theme settings updated successfully.');
+        return back()->with('success', 'Appearance saved.');
     }
 
     public function updateStripe(Request $request)
     {
         $validated = $request->validate([
             'stripe_enabled' => 'boolean',
-            'stripe_public_key' => 'nullable|string|max:255',
-            'stripe_secret_key' => 'nullable|string|max:255',
-            'stripe_webhook_secret' => 'nullable|string|max:255',
+            'stripe_public_key' => 'nullable|string|max:255|starts_with:pk_',
+            'stripe_secret_key' => 'nullable|string|max:255|starts_with:sk_,rk_',
+            'stripe_webhook_secret' => 'nullable|string|max:255|starts_with:whsec_',
         ]);
 
-        $company = auth()->user()->company;
-        $settings = $company->settings ?? CompanySetting::create(['company_id' => $company->id]);
+        foreach (['stripe_secret_key', 'stripe_webhook_secret'] as $secret) {
+            if (blank($validated[$secret] ?? null)) {
+                unset($validated[$secret]);
+            }
+        }
 
-        $settings->update($validated);
+        $this->settings()->update($validated);
 
-        return back()->with('success', 'Stripe settings updated successfully.');
+        return back()->with('success', 'Stripe settings saved.');
     }
 
     public function updateNotesTerms(Request $request)
     {
-        $validated = $request->validate([
-            'default_notes' => 'nullable|string',
-            'default_terms' => 'nullable|string',
-        ]);
+        $this->settings()->update($request->validate([
+            'default_notes' => 'nullable|string|max:5000',
+            'default_terms' => 'nullable|string|max:5000',
+        ]));
 
+        return back()->with('success', 'Default notes & terms saved.');
+    }
+
+    private function settings(): CompanySetting
+    {
         $company = auth()->user()->company;
-        $settings = $company->settings ?? CompanySetting::create(['company_id' => $company->id]);
 
-        $settings->update($validated);
-
-        return back()->with('success', 'Notes & Terms settings updated successfully.');
+        return $company->settings ?? CompanySetting::create(['company_id' => $company->id]);
     }
 
     public function previewTemplate($template)
