@@ -1,0 +1,28 @@
+# Starts the local dev stack on Windows in three windows: web server, queue worker, scheduler.
+#
+# `php artisan horizon` cannot run on native Windows (PHP for Windows has no pcntl extension),
+# so locally a plain queue worker processes the same Redis queues Horizon would. Jobs still
+# show up in the Horizon dashboard at /horizon (superadmin login required).
+# In production (Linux) run `php artisan horizon` under Supervisor/systemd instead — see INSTALL.md.
+#
+# Usage:  powershell -ExecutionPolicy Bypass -File .\start-dev.ps1
+
+$ErrorActionPreference = 'Stop'
+Set-Location -Path $PSScriptRoot
+
+$php = (Get-Command php -ErrorAction Stop).Source
+
+# MySQL (AMPPS) must be up or every request stalls on DB connection retries.
+if (-not (Test-NetConnection -ComputerName 127.0.0.1 -Port 3306 -InformationLevel Quiet -WarningAction SilentlyContinue)) {
+    Write-Warning 'MySQL is not listening on 127.0.0.1:3306 - start it from the AMPPS control panel first.'
+}
+if (-not (Test-NetConnection -ComputerName 127.0.0.1 -Port 6379 -InformationLevel Quiet -WarningAction SilentlyContinue)) {
+    Write-Warning 'Redis is not listening on 127.0.0.1:6379 - start the Redis service first (cache, sessions and queues use it).'
+}
+
+Start-Process -FilePath $php -ArgumentList 'artisan', 'serve', '--host=127.0.0.1', '--port=8002' -WorkingDirectory $PSScriptRoot
+Start-Process -FilePath $php -ArgumentList 'artisan', 'queue:work', 'redis', '--queue=high,default,mail', '--tries=3', '--timeout=75', '--sleep=2' -WorkingDirectory $PSScriptRoot
+Start-Process -FilePath $php -ArgumentList 'artisan', 'schedule:work' -WorkingDirectory $PSScriptRoot
+
+Write-Host 'App:     http://localhost:8002'
+Write-Host 'Horizon: http://localhost:8002/horizon (log in at /superadmin/login first)'
