@@ -44,14 +44,20 @@ class UpdateController extends Controller
         $licenseKey = SystemSetting::get('license_key');
         $updateServerUrl = SystemSetting::get('update_server_url', config('installer.update_server'));
 
-        return view('superadmin.updates.index', compact(
-            'currentVersion',
-            'autoUpdateEnabled',
-            'updateMethod',
-            'lastUpdateCheck',
-            'licenseKey',
-            'updateServerUrl'
-        ));
+        return \Inertia\Inertia::render('Superadmin/Updates/Index', [
+            'currentVersion' => $currentVersion,
+            'autoUpdateEnabled' => $autoUpdateEnabled,
+            'updateMethod' => $updateMethod,
+            'lastUpdateCheck' => $lastUpdateCheck,
+            // Only a masked hint of the licence key is sent to the browser.
+            'licenseHint' => $licenseKey ? '••••' . substr($licenseKey, -4) : null,
+            'updateServerUrl' => $updateServerUrl,
+            'urls' => [
+                'check' => route('superadmin.updates.check'),
+                'download' => route('superadmin.updates.download'),
+                'backups' => route('superadmin.updates.backups'),
+            ],
+        ]);
     }
 
     public function settings(Request $request)
@@ -60,7 +66,7 @@ class UpdateController extends Controller
             'auto_update_enabled' => 'boolean',
             'update_method' => 'in:manual,server,upload',
             'license_key' => 'nullable|string|max:255',
-            'update_server_url' => 'nullable|url|max:255',
+            'update_server_url' => 'nullable|url:https,http|max:255',
         ]);
 
         SystemSetting::set('auto_update_enabled', $request->boolean('auto_update_enabled') ? 'true' : 'false');
@@ -146,9 +152,16 @@ class UpdateController extends Controller
     {
         try {
             $request->validate([
-                'download_url' => 'required|url',
-                'version' => 'required|string',
+                'download_url' => 'required|url:https,http',
+                'version' => 'required|string|max:50',
             ]);
+
+            // Only install packages served by the configured update server (the URL comes
+            // from the browser; previously any URL was fetched and installed).
+            $serverHost = parse_url((string) (SystemSetting::get('update_server_url') ?: config('installer.update_server')), PHP_URL_HOST);
+            if (! $serverHost || strcasecmp((string) parse_url($request->download_url, PHP_URL_HOST), $serverHost) !== 0) {
+                return response()->json(['success' => false, 'message' => 'The download URL must be on the configured update server.'], 422);
+            }
 
             $this->createBackup();
 

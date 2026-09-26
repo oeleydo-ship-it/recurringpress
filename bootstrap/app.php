@@ -35,5 +35,21 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        // Branded error pages (Inertia) for web requests outside debug mode.
+        $exceptions->respond(function (\Symfony\Component\HttpFoundation\Response $response, \Throwable $e, \Illuminate\Http\Request $request) {
+            $status = $response->getStatusCode();
+
+            if (! app()->hasDebugModeEnabled() && in_array($status, [403, 404, 419, 429, 500, 503], true)
+                && ! $request->expectsJson() && ! $request->is('horizon*', 'stripe/webhook')) {
+                if ($status === 419) {
+                    return back()->with('error', 'Your session expired. Please try again.');
+                }
+
+                return \Inertia\Inertia::render('Errors/Show', ['status' => $status])
+                    ->toResponse($request)
+                    ->setStatusCode($status);
+            }
+
+            return $response;
+        });
     })->create();

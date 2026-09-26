@@ -25,6 +25,9 @@ import {
 import { useEffect, useState } from 'react';
 import { Avatar, Dropdown } from '@/Components/ui';
 import { isCurrent, route } from '@/lib/route';
+import { useApplyTheme } from '@/lib/theme';
+
+const ADMIN_THEME = { primary: '#4f46e5', sidebar: '#020617', sidebar_text: '#e2e8f0', font: 'Inter', font_size: 'base' };
 import { cn } from '@/lib/utils';
 
 const groups = [
@@ -64,6 +67,8 @@ export default function SuperadminLayout({ children }) {
     const { superadmin, site } = usePage().props;
     const { url } = usePage();
     const [open, setOpen] = useState(false);
+    // Fixed platform theme (also on <html> so modals/menus rendered in portals match).
+    useApplyTheme(ADMIN_THEME);
 
     useEffect(() => setOpen(false), [url]);
     useEffect(() => {

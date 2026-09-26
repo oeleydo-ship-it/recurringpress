@@ -3,101 +3,102 @@
 namespace App\Http\Controllers\Superadmin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Company;
 use App\Models\SubscriptionPlan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Inertia\Inertia;
 
 class PlanController extends Controller
 {
     public function index()
     {
-        $plans = SubscriptionPlan::ordered()->paginate(20);
-        return view('superadmin.plans.index', compact('plans'));
+        return Inertia::render('Superadmin/Plans/Index', [
+            'plans' => SubscriptionPlan::withCount('companies')->ordered()->get()->map(fn ($p) => [
+                ...$this->payload($p),
+                'companies_count' => $p->companies_count,
+            ]),
+        ]);
     }
 
     public function create()
     {
-        return view('superadmin.plans.create');
+        return Inertia::render('Superadmin/Plans/Form', ['plan' => null]);
     }
 
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'slug' => 'nullable|string|max:255|unique:subscription_plans',
-            'description' => 'nullable|string',
-            'price' => 'required|numeric|min:0',
-            'billing_cycle' => 'required|in:monthly,yearly',
-            'max_invoices' => 'nullable|integer|min:1',
-            'max_clients' => 'nullable|integer|min:1',
-            'max_users' => 'nullable|integer|min:1',
-            'max_products' => 'nullable|integer|min:1',
-            'stripe_enabled' => 'boolean',
-            'custom_branding' => 'boolean',
-            'api_access' => 'boolean',
-            'is_active' => 'boolean',
-            'is_popular' => 'boolean',
-            'order' => 'integer',
-        ]);
+        SubscriptionPlan::create($this->validated($request));
 
-        if (empty($validated['slug'])) {
-            $validated['slug'] = Str::slug($validated['name']);
-        }
-
-        $validated['stripe_enabled'] = $request->boolean('stripe_enabled');
-        $validated['custom_branding'] = $request->boolean('custom_branding');
-        $validated['api_access'] = $request->boolean('api_access');
-        $validated['is_active'] = $request->boolean('is_active');
-        $validated['is_popular'] = $request->boolean('is_popular');
-
-        SubscriptionPlan::create($validated);
-
-        return redirect()->route('superadmin.plans.index')->with('success', 'Plan created successfully.');
+        return redirect()->route('superadmin.plans.index')->with('success', 'Plan created.');
     }
 
     public function edit(SubscriptionPlan $plan)
     {
-        return view('superadmin.plans.edit', compact('plan'));
+        return Inertia::render('Superadmin/Plans/Form', ['plan' => $this->payload($plan)]);
     }
 
     public function update(Request $request, SubscriptionPlan $plan)
     {
+        $plan->update($this->validated($request, $plan));
+
+        return redirect()->route('superadmin.plans.index')->with('success', 'Plan updated.');
+    }
+
+    public function destroy(SubscriptionPlan $plan)
+    {
+        // Deleting a plan that tenants are on would orphan their subscription.
+        if (Company::where('subscription_plan_id', $plan->id)->exists()) {
+            return back()->with('error', 'Companies are subscribed to this plan. Deactivate it instead, or move them first.');
+        }
+
+        $plan->delete();
+
+        return redirect()->route('superadmin.plans.index')->with('success', 'Plan deleted.');
+    }
+
+    private function validated(Request $request, ?SubscriptionPlan $plan = null): array
+    {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'slug' => 'nullable|string|max:255|unique:subscription_plans,slug,' . $plan->id,
-            'description' => 'nullable|string',
-            'price' => 'required|numeric|min:0',
+            'slug' => ['nullable', 'string', 'max:255', 'alpha_dash', Rule::unique('subscription_plans', 'slug')->ignore($plan?->id)],
+            'description' => 'nullable|string|max:1000',
+            'price' => 'required|numeric|min:0|max:100000',
             'billing_cycle' => 'required|in:monthly,yearly',
             'max_invoices' => 'nullable|integer|min:1',
             'max_clients' => 'nullable|integer|min:1',
             'max_users' => 'nullable|integer|min:1',
             'max_products' => 'nullable|integer|min:1',
+            'features' => 'nullable|array|max:30',
+            'features.*' => 'nullable|string|max:120',
             'stripe_enabled' => 'boolean',
             'custom_branding' => 'boolean',
             'api_access' => 'boolean',
             'is_active' => 'boolean',
             'is_popular' => 'boolean',
-            'order' => 'integer',
+            'order' => 'nullable|integer|min:0|max:1000',
         ]);
 
-        if (empty($validated['slug'])) {
-            $validated['slug'] = Str::slug($validated['name']);
+        $validated['slug'] = ($validated['slug'] ?? null) ?: Str::slug($validated['name']);
+        $validated['features'] = array_values(array_filter(array_map('trim', $validated['features'] ?? [])));
+        $validated['order'] = $validated['order'] ?? 0;
+        foreach (['max_invoices', 'max_clients', 'max_users', 'max_products'] as $limit) {
+            $validated[$limit] = $validated[$limit] ?? null;
+        }
+        foreach (['stripe_enabled', 'custom_branding', 'api_access', 'is_active', 'is_popular'] as $flag) {
+            $validated[$flag] = $request->boolean($flag);
         }
 
-        $validated['stripe_enabled'] = $request->boolean('stripe_enabled');
-        $validated['custom_branding'] = $request->boolean('custom_branding');
-        $validated['api_access'] = $request->boolean('api_access');
-        $validated['is_active'] = $request->boolean('is_active');
-        $validated['is_popular'] = $request->boolean('is_popular');
-
-        $plan->update($validated);
-
-        return redirect()->route('superadmin.plans.index')->with('success', 'Plan updated successfully.');
+        return $validated;
     }
 
-    public function destroy(SubscriptionPlan $plan)
+    private function payload(SubscriptionPlan $p): array
     {
-        $plan->delete();
-        return redirect()->route('superadmin.plans.index')->with('success', 'Plan deleted successfully.');
+        return [
+            ...$p->only('id', 'name', 'slug', 'description', 'billing_cycle', 'max_invoices', 'max_clients', 'max_users', 'max_products', 'stripe_enabled', 'custom_branding', 'api_access', 'is_active', 'is_popular', 'order'),
+            'price' => (float) $p->price,
+            'features' => $p->features ?? [],
+        ];
     }
 }

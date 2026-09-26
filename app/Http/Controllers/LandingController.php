@@ -54,7 +54,7 @@ class LandingController extends Controller
             'items' => $this->json('features_page_json') ?: $this->json('landing_features_json'),
             'cta' => [
                 'title' => SystemSetting::get('features_page_cta_title', 'Ready to get started?'),
-                'subtitle' => SystemSetting::get('features_page_cta_subtitle', 'Create your free account in under a minute.'),
+                'subtitle' => str_replace('{site_name}', SystemSetting::get('site_name', 'RecurringPress'), (string) SystemSetting::get('features_page_cta_subtitle', 'Create your free account in under a minute.')),
             ],
         ]);
     }
@@ -145,11 +145,15 @@ class LandingController extends Controller
 
     private function cmsPayload(CmsPage $page): array
     {
+        $blocks = $page->editor_mode === 'blocks' && ! empty($page->blocks);
+
         return [
             'title' => $page->title,
             'show_title' => $page->show_title === null ? true : (bool) $page->show_title,
-            // Superadmin-authored HTML (same trust model as before).
-            'content' => $page->content,
+            'full_width' => $blocks,
+            // Superadmin-authored HTML (same trust model as before). Block pages are rendered
+            // server-side by the existing Blade block renderer.
+            'content' => $blocks ? view('partials.block-renderer', ['blocks' => $page->blocks])->render() : $page->content,
             'meta_title' => $page->meta_title ?: $page->title,
             'meta_description' => $page->meta_description ?: Str::limit(trim(strip_tags((string) $page->content)), 160),
             'updated_at' => $page->updated_at?->toIso8601String(),
