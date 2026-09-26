@@ -181,3 +181,22 @@ follow-up.
   emails are queued on `mail`.
 - On Windows, Horizon cannot run (no `pcntl`), so use `start-dev.ps1`. See INSTALL.md §5 for the
   production Supervisor setup.
+
+## Upgrade — Laravel 13 + React/Inertia
+
+- Laravel 13.x on PHP 8.4 (AMPPS PHP 8.2 cannot run it). The Laravel 13 hardening defaults are on: cache
+  unserialization is restricted, and sessions are serialized as JSON.
+- The whole UI (tenant app, public documents/checkout, marketing site, auth, superadmin, error pages) is now React 19 +
+  Inertia v3 + Tailwind v4. It is server-side rendered with `artisan inertia:start-ssr` and falls back to client rendering.
+  100 unused Blade views were removed. The remaining views cover PDFs, emails, the installer, the CMS block renderer and
+  the root template.
+- Security fixes made during the migration:
+  - Inertia props are explicit payloads, so models are never serialized whole.
+  - Stripe and SMTP secrets are write-only in forms.
+  - Client, product and invoice id validation is company-scoped.
+  - Stripe payment recording is idempotent and row-locked, and is shared by the webhook and the success redirect.
+  - Menu URLs reject `javascript:` URLs.
+  - Media uploads derive the extension from the detected MIME type, and SVG is blocked.
+  - The updater only downloads from the configured update-server host.
+  - Superadmin payout actions no longer break on tenant global scopes.
+  - A page's `show_title` could never be switched off; fixed.
