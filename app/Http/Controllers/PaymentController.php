@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Company;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\Quotation;
 use App\Models\Receipt;
 use App\Services\StripeGateway;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -205,10 +206,11 @@ class PaymentController extends Controller
 
         $intent = $event->data->object;
         $invoiceId = (int) ($intent->metadata->invoice_id ?? 0);
+        $quotationId = (int) ($intent->metadata->quotation_id ?? 0);
         $companyId = (int) ($intent->metadata->company_id ?? 0);
 
-        if (! $invoiceId || ! $companyId) {
-            return response()->json(['status' => 'ignored']); // not an invoice payment (e.g. subscription)
+        if ((! $invoiceId && ! $quotationId) || ! $companyId) {
+            return response()->json(['status' => 'ignored']); // e.g. subscription payments
         }
 
         if ($verifiedCompanyId !== null && $verifiedCompanyId !== $companyId) {
@@ -217,16 +219,22 @@ class PaymentController extends Controller
             return response()->json(['error' => 'Company mismatch'], 400);
         }
 
-        $invoice = Invoice::withoutGlobalScopes()->where('id', $invoiceId)->where('company_id', $companyId)->first();
-
-        if (! $invoice) {
-            return response()->json(['status' => 'unknown invoice']);
-        }
-
         try {
-            StripeGateway::recordInvoicePayment($invoice, $intent);
+            if ($invoiceId) {
+                $invoice = Invoice::withoutGlobalScopes()->where('id', $invoiceId)->where('company_id', $companyId)->first();
+                if (! $invoice) {
+                    return response()->json(['status' => 'unknown invoice']);
+                }
+                StripeGateway::recordInvoicePayment($invoice, $intent);
+            } else {
+                $quotation = Quotation::withoutGlobalScopes()->where('id', $quotationId)->where('company_id', $companyId)->first();
+                if (! $quotation || ! StripeGateway::intentMatches($intent, $companyId, 'quotation_id', $quotation->id, (float) $quotation->total)) {
+                    return response()->json(['status' => 'unknown or mismatched quotation']);
+                }
+                StripeGateway::payQuotation($quotation, $intent);
+            }
         } catch (\Throwable $e) {
-            Log::error('Stripe webhook failed to record payment', ['invoice_id' => $invoiceId, 'error' => $e->getMessage()]);
+            Log::error('Stripe webhook failed to record payment', ['intent' => $intent->id ?? null, 'error' => $e->getMessage()]);
 
             return response()->json(['error' => 'Processing failed'], 500); // Stripe will retry
         }

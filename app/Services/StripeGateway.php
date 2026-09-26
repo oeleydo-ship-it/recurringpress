@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\CompanySetting;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\Quotation;
 use App\Models\Receipt;
 use App\Models\SystemSetting;
 use Illuminate\Support\Facades\DB;
@@ -63,6 +64,78 @@ class StripeGateway
         $mode = SystemSetting::get('stripe_mode', 'test') === 'live' ? 'live' : 'test';
 
         return SystemSetting::get("stripe_{$mode}_{$type}_key") ?: null;
+    }
+
+    /**
+     * Pay an accepted quotation: convert it to an invoice (once, under a row lock) and record
+     * the payment against that invoice. Safe to call repeatedly with the same PaymentIntent.
+     */
+    public static function payQuotation(Quotation $quotation, object $paymentIntent): Invoice
+    {
+        return DB::transaction(function () use ($quotation, $paymentIntent) {
+            $locked = Quotation::withoutGlobalScopes()->with('items')->whereKey($quotation->id)->lockForUpdate()->firstOrFail();
+
+            $invoice = $locked->converted_invoice_id
+                ? Invoice::withoutGlobalScopes()->find($locked->converted_invoice_id)
+                : null;
+
+            if (! $invoice) {
+                $company = Company::withoutGlobalScopes()->findOrFail($locked->company_id);
+
+                $invoice = Invoice::withoutGlobalScopes()->create([
+                    'company_id' => $locked->company_id,
+                    'client_id' => $locked->client_id,
+                    'created_by' => $locked->user_id,
+                    'invoice_number' => $company->getNextInvoiceNumber(),
+                    'reference' => $locked->reference ?: $locked->quotation_number,
+                    'issue_date' => now(),
+                    'due_date' => now(),
+                    'status' => Invoice::STATUS_SENT,
+                    'sent_at' => now(),
+                    'discount_amount' => $locked->discount_amount,
+                    'discount_type' => $locked->discount_type,
+                    'notes' => $locked->notes,
+                    'terms' => $locked->terms,
+                ]);
+
+                foreach ($locked->items as $index => $item) {
+                    $invoice->items()->create([
+                        'product_id' => $item->product_id,
+                        'name' => $item->name,
+                        'description' => $item->description,
+                        'quantity' => $item->quantity,
+                        'price' => $item->price,
+                        'tax_rate' => $item->tax_rate,
+                        'unit' => $item->unit,
+                        'sort_order' => $index,
+                    ]);
+                }
+
+                $invoice->calculateTotals();
+                $invoice->save();
+
+                $locked->update([
+                    'status' => Quotation::STATUS_CONVERTED,
+                    'converted_invoice_id' => $invoice->id,
+                ]);
+            }
+
+            self::recordInvoicePayment($invoice, $paymentIntent);
+
+            return $invoice->fresh();
+        });
+    }
+
+    /**
+     * Check that a PaymentIntent really pays for this document: succeeded, tagged with the
+     * same company + document id, and for at least the expected amount.
+     */
+    public static function intentMatches(object $intent, int $companyId, string $idKey, int $id, float $minimumAmount): bool
+    {
+        return ($intent->status ?? null) === 'succeeded'
+            && (int) ($intent->metadata->company_id ?? 0) === $companyId
+            && (int) ($intent->metadata->{$idKey} ?? 0) === $id
+            && (int) ($intent->amount_received ?? 0) >= (int) round($minimumAmount * 100);
     }
 
     /**

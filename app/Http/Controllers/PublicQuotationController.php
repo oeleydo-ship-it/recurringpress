@@ -3,79 +3,88 @@
 namespace App\Http\Controllers;
 
 use App\Models\Quotation;
-use App\Models\Invoice;
-use App\Models\Payment;
-use App\Models\Receipt;
 use App\Notifications\QuotationResponseNotification;
+use App\Services\StripeGateway;
+use App\Support\PublicDocument;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Notification;
-use Stripe\Stripe;
+use Illuminate\Support\Facades\Log;
+use Inertia\Inertia;
 use Stripe\PaymentIntent;
+use Stripe\Stripe;
 
+/**
+ * Client-facing quotation page: review, accept / reject, and optionally pay up-front.
+ */
 class PublicQuotationController extends Controller
 {
     public function show(string $token)
     {
-        $quotation = Quotation::withoutGlobalScopes()
-            ->with([
-                'company',
-                'company.settings',
-                'items',
-                'client' => function ($query) {
-                    $query->withoutGlobalScopes();
-                }
-            ])
-            ->where('share_token', $token)
-            ->firstOrFail();
+        $quotation = $this->find($token);
 
-        // Record the first time the client opened the link. Sharing the link is itself
-        // the act of sending, so a quotation still sitting in draft is promoted to sent
-        // here — that keeps the status honest and makes the accept path below coherent.
-        if (!$quotation->viewed_at) {
+        // Opening the link counts as delivery: record the first view and promote drafts to sent.
+        if (! $quotation->viewed_at) {
             $quotation->update([
                 'viewed_at' => now(),
                 'sent_at' => $quotation->sent_at ?? now(),
-                'status' => $quotation->status === Quotation::STATUS_DRAFT
-                    ? Quotation::STATUS_SENT
-                    : $quotation->status,
+                'status' => $quotation->status === Quotation::STATUS_DRAFT ? Quotation::STATUS_SENT : $quotation->status,
             ]);
         }
 
-        $company = $quotation->company;
-        $settings = $company->settings;
+        $settings = $quotation->company->settings;
+        $accepted = $quotation->status === Quotation::STATUS_ACCEPTED;
 
-        $paymentMethods = [];
-        if ($settings) {
-            if ($settings->accept_bank_transfer) {
-                $paymentMethods[] = 'bank_transfer';
-            }
-            // Stripe is available if credentials exist and is enabled
-            if ($this->hasStripeCredentials($settings)) {
-                $paymentMethods[] = 'stripe';
-            }
-        }
+        return Inertia::render('Public/Quotation', [
+            'quotation' => [
+                'number' => $quotation->quotation_number,
+                'status' => $quotation->isExpired() && in_array($quotation->status, ['draft', 'sent'], true) ? 'expired' : $quotation->status,
+                'issue_date' => $quotation->issue_date?->toDateString(),
+                'valid_until' => $quotation->valid_until?->toDateString(),
+                'total' => (float) $quotation->total,
+                'currency' => $quotation->company->currency ?? 'USD',
+                'client_name' => $quotation->client?->bill_to_name,
+                'responded_at' => $quotation->responded_at?->toIso8601String(),
+                'can_respond' => ! $quotation->isExpired() && $quotation->canTransitionTo(Quotation::STATUS_ACCEPTED) && in_array($quotation->status, ['draft', 'sent', 'expired'], true),
+            ],
+            'company' => PublicDocument::company($quotation->company),
+            'payment' => $accepted && ! $quotation->converted_invoice_id ? PublicDocument::paymentOptions($settings) : null,
+            'urls' => [
+                'document' => route('quotations.public.document', $token),
+                'pdf' => route('quotations.public.download', $token),
+                'accept' => route('quotations.public.accept', $token),
+                'reject' => route('quotations.public.reject', $token),
+                'intent' => route('quotations.public.stripe.intent', $token),
+                'return' => route('quotations.public.stripe.success', $token),
+            ],
+        ]);
+    }
 
-        return view('quotations.public', compact('quotation', 'company', 'settings', 'paymentMethods'));
+    public function document(string $token)
+    {
+        $quotation = $this->find($token);
+
+        return view($this->templateView($quotation), compact('quotation'));
+    }
+
+    public function download(string $token)
+    {
+        $quotation = $this->find($token);
+
+        return Pdf::loadView($this->templateView($quotation), compact('quotation'))
+            ->download("quotation-{$quotation->quotation_number}.pdf");
     }
 
     public function accept(Request $request, string $token)
     {
-        $quotation = Quotation::withoutGlobalScopes()
-            ->with([
-                'company',
-                'client' => function ($query) {
-                    $query->withoutGlobalScopes();
-                }
-            ])
-            ->where('share_token', $token)
-            ->firstOrFail();
-
-        if (!$quotation->canTransitionTo(Quotation::STATUS_ACCEPTED)) {
-            return back()->with('error', 'This quotation cannot be accepted.');
-        }
+        $quotation = $this->find($token);
+        $request->validate(['notes' => 'nullable|string|max:1000']);
 
         if ($quotation->isExpired()) {
             return back()->with('error', 'This quotation has expired.');
+        }
+
+        if (! $quotation->canTransitionTo(Quotation::STATUS_ACCEPTED)) {
+            return back()->with('error', 'This quotation cannot be accepted.');
         }
 
         $quotation->update([
@@ -85,31 +94,19 @@ class PublicQuotationController extends Controller
             'response_ip' => $request->ip(),
         ]);
 
-        // Notify company users
         $this->notifyCompany($quotation, 'accepted');
 
-        return back()->with('success', 'Quotation accepted successfully! The company will contact you shortly.');
+        return back()->with('success', 'Quotation accepted — thank you! ' . $quotation->company->name . ' has been notified.');
     }
 
     public function reject(Request $request, string $token)
     {
-        $quotation = Quotation::withoutGlobalScopes()
-            ->with([
-                'company',
-                'client' => function ($query) {
-                    $query->withoutGlobalScopes();
-                }
-            ])
-            ->where('share_token', $token)
-            ->firstOrFail();
+        $quotation = $this->find($token);
+        $request->validate(['rejection_reason' => 'nullable|string|max:1000']);
 
-        if (!$quotation->canTransitionTo(Quotation::STATUS_REJECTED)) {
-            return back()->with('error', 'This quotation cannot be rejected.');
+        if (! $quotation->canTransitionTo(Quotation::STATUS_REJECTED)) {
+            return back()->with('error', 'This quotation cannot be declined.');
         }
-
-        $request->validate([
-            'rejection_reason' => 'nullable|string|max:1000',
-        ]);
 
         $quotation->update([
             'status' => Quotation::STATUS_REJECTED,
@@ -118,68 +115,37 @@ class PublicQuotationController extends Controller
             'response_ip' => $request->ip(),
         ]);
 
-        // Notify company users
         $this->notifyCompany($quotation, 'rejected');
 
-        return back()->with('success', 'Quotation rejected. Thank you for your response.');
+        return back()->with('success', 'Thanks for letting us know.');
     }
 
+    /** Legacy entry point; payment now happens on the quotation page. */
     public function selectPayment(Request $request, string $token)
     {
-        $quotation = Quotation::withoutGlobalScopes()
-            ->with([
-                'company',
-                'company.settings',
-                'items',
-                'client' => function ($query) {
-                    $query->withoutGlobalScopes();
-                }
-            ])
-            ->where('share_token', $token)
-            ->firstOrFail();
-
-        if ($quotation->status !== Quotation::STATUS_ACCEPTED) {
-            return back()->with('error', 'Please accept the quotation first before proceeding to payment.');
-        }
-
-        $paymentMethod = $request->input('payment_method');
-        $settings = $quotation->company->settings;
-
-        if ($paymentMethod === 'bank_transfer') {
-            return view('quotations.payment-bank', compact('quotation', 'settings'));
-        }
-
-        if ($paymentMethod === 'stripe') {
-            return $this->initiateStripePayment($quotation, $settings);
-        }
-
-        return back()->with('error', 'Invalid payment method selected.');
+        return redirect()->route('quotations.public', $token);
     }
 
     public function createStripeIntent(string $token)
     {
-        $quotation = Quotation::withoutGlobalScopes()
-            ->with(['company', 'company.settings'])
-            ->where('share_token', $token)
-            ->firstOrFail();
-
-        if ($quotation->status !== Quotation::STATUS_ACCEPTED) {
-            return response()->json(['error' => 'Quotation not accepted'], 400);
-        }
-
+        $quotation = $this->find($token);
         $settings = $quotation->company->settings;
-        $stripeSecretKey = $this->getStripeSecretKey($settings);
 
-        if (!$stripeSecretKey) {
-            return response()->json(['error' => 'Stripe not configured'], 400);
+        if ($quotation->status !== Quotation::STATUS_ACCEPTED || $quotation->converted_invoice_id) {
+            return response()->json(['error' => 'Please accept the quotation first.'], 400);
         }
 
-        Stripe::setApiKey($stripeSecretKey);
+        if (! StripeGateway::available($settings)) {
+            return response()->json(['error' => 'Card payments are not available.'], 400);
+        }
+
+        Stripe::setApiKey(StripeGateway::secretKey($settings));
 
         try {
             $paymentIntent = PaymentIntent::create([
-                'amount' => (int) ($quotation->total * 100),
+                'amount' => (int) round((float) $quotation->total * 100),
                 'currency' => strtolower($quotation->company->currency ?? 'usd'),
+                'description' => "Quotation {$quotation->quotation_number}",
                 'metadata' => [
                     'quotation_id' => $quotation->id,
                     'company_id' => $quotation->company_id,
@@ -189,208 +155,80 @@ class PublicQuotationController extends Controller
 
             return response()->json([
                 'clientSecret' => $paymentIntent->client_secret,
-                'publishableKey' => $this->getStripePublishableKey($settings),
+                'publishableKey' => StripeGateway::publishableKey($settings),
             ]);
-        } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+        } catch (\Throwable $e) {
+            Log::error('Public quotation PaymentIntent failed', ['quotation_id' => $quotation->id, 'error' => $e->getMessage()]);
+
+            return response()->json(['error' => 'Could not start the card payment. Please try again.'], 500);
         }
     }
 
+    /**
+     * Previously any succeeded PaymentIntent id converted the quotation into a PAID invoice
+     * (no metadata or amount check — on the shared platform account any other payment's id
+     * worked). The intent must now be for this quotation, this company and its full total.
+     */
     public function stripeSuccess(Request $request, string $token)
     {
-        $quotation = Quotation::withoutGlobalScopes()
-            ->with([
-                'company',
-                'company.settings',
-                'items',
-                'client' => function ($query) {
-                    $query->withoutGlobalScopes();
-                }
-            ])
-            ->where('share_token', $token)
-            ->firstOrFail();
+        $quotation = $this->find($token);
+        $intentId = (string) $request->input('payment_intent');
 
-        $paymentIntentId = $request->input('payment_intent');
-
-        if (!$paymentIntentId) {
+        if (! str_starts_with($intentId, 'pi_')) {
             return redirect()->route('quotations.public', $token)->with('error', 'Payment verification failed.');
         }
 
-        $settings = $quotation->company->settings;
-        $stripeSecretKey = $this->getStripeSecretKey($settings);
-
-        Stripe::setApiKey($stripeSecretKey);
+        Stripe::setApiKey(StripeGateway::secretKey($quotation->company->settings));
 
         try {
-            $paymentIntent = PaymentIntent::retrieve($paymentIntentId);
+            $intent = PaymentIntent::retrieve($intentId);
+        } catch (\Throwable $e) {
+            Log::warning('Public quotation payment verification failed', ['quotation_id' => $quotation->id, 'error' => $e->getMessage()]);
 
-            if ($paymentIntent->status === 'succeeded') {
-                // Convert quotation to invoice and record payment
-                $invoice = $this->convertToInvoiceAndPay($quotation, $paymentIntent);
-
-                return view('quotations.payment-success', compact('quotation', 'invoice', 'paymentIntent'));
-            }
-        } catch (\Exception $e) {
-            return redirect()->route('quotations.public', $token)->with('error', 'Payment verification failed: ' . $e->getMessage());
+            return redirect()->route('quotations.public', $token)->with('error', 'We could not verify the payment. If you were charged, please contact us.');
         }
 
-        return redirect()->route('quotations.public', $token)->with('error', 'Payment was not successful.');
+        if (in_array($intent->status, ['processing', 'requires_capture'], true)) {
+            return redirect()->route('quotations.public', $token)->with('info', 'Your payment is processing.');
+        }
+
+        if (! StripeGateway::intentMatches($intent, $quotation->company_id, 'quotation_id', $quotation->id, (float) $quotation->total)) {
+            Log::warning('Rejected public quotation payment', ['quotation_id' => $quotation->id, 'intent' => $intent->id, 'status' => $intent->status]);
+
+            return redirect()->route('quotations.public', $token)->with('error', 'Payment was not successful.');
+        }
+
+        $invoice = StripeGateway::payQuotation($quotation, $intent);
+
+        return redirect()->route('invoices.public', $invoice->share_token)
+            ->with('success', 'Payment received — thank you! Here is your paid invoice.');
     }
 
-    protected function initiateStripePayment(Quotation $quotation, $settings)
+    private function find(string $token): Quotation
     {
-        $publishableKey = $this->getStripePublishableKey($settings);
+        abort_unless(preg_match('/^[A-Za-z0-9]{16,64}$/', $token), 404);
 
-        if (!$publishableKey) {
-            return back()->with('error', 'Stripe is not configured properly.');
-        }
-
-        return view('quotations.payment-stripe', compact('quotation', 'settings', 'publishableKey'));
+        return Quotation::withoutGlobalScopes()
+            ->with(['company.settings', 'company.users', 'items', 'client' => fn ($q) => $q->withoutGlobalScopes()])
+            ->where('share_token', $token)
+            ->firstOrFail();
     }
 
-    protected function hasStripeCredentials($settings): bool
+    private function templateView(Quotation $quotation): string
     {
-        if (!$settings) {
-            return !empty(config('services.stripe.secret')) && !empty(config('services.stripe.key'));
-        }
+        $template = $quotation->company->settings->invoice_template ?? 'classic';
 
-        // Check if Stripe is enabled
-        $stripeEnabled = $settings->accept_stripe || $settings->stripe_enabled;
-        if (!$stripeEnabled) {
-            return false;
-        }
-
-        // If using own gateway, check tenant's keys
-        if ($settings->payment_gateway_mode === 'own') {
-            return !empty($settings->stripe_public_key) && !empty($settings->stripe_secret_key);
-        }
-
-        // Use app-level Stripe
-        return !empty(config('services.stripe.secret')) && !empty(config('services.stripe.key'));
-    }
-
-    protected function getStripeSecretKey($settings): ?string
-    {
-        if ($settings->payment_gateway_mode === 'own' && !empty($settings->stripe_secret_key)) {
-            return $settings->stripe_secret_key;
-        }
-
-        return config('services.stripe.secret');
-    }
-
-    protected function getStripePublishableKey($settings): ?string
-    {
-        if ($settings->payment_gateway_mode === 'own' && !empty($settings->stripe_public_key)) {
-            return $settings->stripe_public_key;
-        }
-
-        return config('services.stripe.key');
+        return view()->exists("quotations.pdf.{$template}") ? "quotations.pdf.{$template}" : 'quotations.pdf.classic';
     }
 
     protected function notifyCompany(Quotation $quotation, string $action): void
     {
-        $users = $quotation->company->users;
-
-        foreach ($users as $user) {
+        foreach ($quotation->company->users as $user) {
             try {
                 $user->notify(new QuotationResponseNotification($quotation, $action));
-            } catch (\Exception $e) {
-                \Log::error('Failed to send quotation notification: ' . $e->getMessage());
+            } catch (\Throwable $e) {
+                Log::error('Failed to queue quotation notification: ' . $e->getMessage());
             }
         }
-    }
-
-    protected function convertToInvoiceAndPay(Quotation $quotation, $paymentIntent): Invoice
-    {
-        // Check if already converted
-        if ($quotation->converted_invoice_id) {
-            return Invoice::withoutGlobalScopes()->find($quotation->converted_invoice_id);
-        }
-
-        $company = \App\Models\Company::withoutGlobalScopes()->findOrFail($quotation->company_id);
-
-        // The Stripe charge has already succeeded by this point, so the invoice, payment,
-        // receipt and quotation status must all land together. Without this, a failure
-        // part-way through would leave the quotation unconverted and a retry (e.g. the
-        // client refreshing the success page) would bill a second invoice and receipt
-        // against the same payment intent.
-        return \Illuminate\Support\Facades\DB::transaction(function () use ($quotation, $paymentIntent, $company) {
-            return $this->buildPaidInvoice($quotation, $paymentIntent, $company);
-        });
-    }
-
-    protected function buildPaidInvoice(Quotation $quotation, $paymentIntent, $company): Invoice
-    {
-        // Create invoice from quotation
-        $invoice = Invoice::withoutGlobalScopes()->create([
-            'company_id' => $quotation->company_id,
-            'client_id' => $quotation->client_id,
-            'created_by' => $quotation->user_id,
-            'invoice_number' => $company->getNextInvoiceNumber(),
-            'reference' => $quotation->reference,
-            'issue_date' => now(),
-            'due_date' => now()->addDays($company->payment_terms ?? 30),
-            'status' => 'paid',
-            'subtotal' => $quotation->subtotal,
-            'tax_amount' => $quotation->tax_amount,
-            'discount_amount' => $quotation->discount_amount,
-            'discount_type' => $quotation->discount_type,
-            'total' => $quotation->total,
-            'paid_amount' => $quotation->total,
-            'notes' => $quotation->notes,
-            'terms' => $quotation->terms,
-            'paid_at' => now(),
-        ]);
-
-        // Copy items
-        foreach ($quotation->items as $item) {
-            $invoice->items()->create([
-                'name' => $item->name,
-                'description' => $item->description,
-                'quantity' => $item->quantity,
-                'price' => $item->price,
-                'tax_rate' => $item->tax_rate,
-                'unit' => $item->unit,
-            ]);
-        }
-
-        // Check if using app gateway (not own gateway)
-        $settings = $quotation->company->settings;
-        $viaAppGateway = !($settings && $settings->payment_gateway_mode === 'own');
-
-        // Record payment
-        $payment = Payment::create([
-            'company_id' => $quotation->company_id,
-            'invoice_id' => $invoice->id,
-            'client_id' => $quotation->client_id,
-            'payment_number' => $company->getNextPaymentNumber(),
-            'payment_method' => 'stripe',
-            'transaction_id' => $paymentIntent->id,
-            'amount' => $quotation->total,
-            'currency' => $quotation->company->currency ?? 'USD',
-            'status' => 'completed',
-            'via_app_gateway' => $viaAppGateway,
-            'payment_date' => now(),
-        ]);
-
-        // Create receipt
-        Receipt::create([
-            'company_id' => $quotation->company_id,
-            'payment_id' => $payment->id,
-            'invoice_id' => $invoice->id,
-            'client_id' => $quotation->client_id,
-            'receipt_number' => Receipt::generateReceiptNumber($quotation->company_id),
-            'amount' => $quotation->total,
-            'payment_method' => 'stripe',
-            'issued_at' => now(),
-        ]);
-
-        // Update quotation
-        $quotation->update([
-            'status' => Quotation::STATUS_CONVERTED,
-            'converted_invoice_id' => $invoice->id,
-        ]);
-
-        return $invoice;
     }
 }

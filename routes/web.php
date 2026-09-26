@@ -74,10 +74,14 @@ Route::get('/blog/{slug}', [BlogController::class, 'show'])->name('blog.show');
 
 // Public invoice/quotation
 Route::get('/invoice/{token}', [PublicInvoiceController::class, 'show'])->name('invoices.public');
+Route::get('/invoice/{token}/document', [PublicInvoiceController::class, 'document'])->middleware('throttle:public-actions')->name('invoices.public.document');
+Route::get('/invoice/{token}/download', [PublicInvoiceController::class, 'download'])->middleware('throttle:public-actions')->name('invoices.public.download');
 Route::match(['get', 'post'], '/invoice/{token}/payment', [PublicInvoiceController::class, 'selectPayment'])->name('invoices.public.payment');
 Route::post('/invoice/{token}/stripe/intent', [PublicInvoiceController::class, 'createStripeIntent'])->middleware('throttle:public-actions')->name('invoices.public.stripe.intent');
 Route::get('/invoice/{token}/stripe/success', [PublicInvoiceController::class, 'stripeSuccess'])->name('invoices.public.stripe.success');
 Route::get('/quotation/{token}', [PublicQuotationController::class, 'show'])->name('quotations.public');
+Route::get('/quotation/{token}/document', [PublicQuotationController::class, 'document'])->middleware('throttle:public-actions')->name('quotations.public.document');
+Route::get('/quotation/{token}/download', [PublicQuotationController::class, 'download'])->middleware('throttle:public-actions')->name('quotations.public.download');
 Route::post('/quotation/{token}/accept', [PublicQuotationController::class, 'accept'])->middleware('throttle:public-actions')->name('quotations.public.accept');
 Route::post('/quotation/{token}/reject', [PublicQuotationController::class, 'reject'])->middleware('throttle:public-actions')->name('quotations.public.reject');
 Route::post('/quotation/{token}/payment', [PublicQuotationController::class, 'selectPayment'])->name('quotations.public.payment');
