@@ -57,7 +57,7 @@ export function StatCard({ label, value, icon: Icon, tone = 'brand', hint, trend
         <div className={cn('rounded-xl bg-white p-5 shadow-card ring-1 ring-slate-900/5 transition', href && 'hover:shadow-md hover:ring-slate-900/10', className)}>
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-slate-500">{label}</p>
+                    <p className="text-sm leading-5 font-medium text-slate-500">{label}</p>
                     <p className="mt-2 truncate text-2xl font-semibold tracking-tight text-slate-900">{value}</p>
                 </div>
                 {Icon ? (

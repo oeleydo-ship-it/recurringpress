@@ -13,6 +13,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Carbon\Carbon;
 use Inertia\Inertia;
+use App\Support\PasswordResetLink;
 
 class PasswordResetController extends Controller
 {
@@ -44,21 +45,7 @@ class PasswordResetController extends Controller
             return back()->with('status', self::GENERIC_STATUS);
         }
 
-        // Delete any existing tokens for this email
-        DB::table('password_reset_tokens')->where('email', $request->email)->delete();
-
-        // Generate token
-        $token = Str::random(64);
-
-        // Store token
-        DB::table('password_reset_tokens')->insert([
-            'email' => $request->email,
-            'token' => Hash::make($token),
-            'created_at' => Carbon::now(),
-        ]);
-
-        // Send email
-        $resetUrl = route('password.reset', ['token' => $token, 'email' => $request->email]);
+        $resetUrl = PasswordResetLink::for($user);
 
         try {
             Mail::to($user->email)->queue(new PasswordResetMail($user, $resetUrl));
