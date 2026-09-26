@@ -10,7 +10,8 @@
 $ErrorActionPreference = 'Stop'
 Set-Location -Path $PSScriptRoot
 
-$php = (Get-Command php -ErrorAction Stop).Source
+# Laravel 13 needs PHP 8.3+ (AMPPS ships 8.2), so prefer the standalone PHP 8.4 install.
+$php = if (Test-Path 'C:\php84\php.exe') { 'C:\php84\php.exe' } else { (Get-Command php -ErrorAction Stop).Source }
 
 # MySQL (AMPPS) must be up or every request stalls on DB connection retries.
 if (-not (Test-NetConnection -ComputerName 127.0.0.1 -Port 3306 -InformationLevel Quiet -WarningAction SilentlyContinue)) {

@@ -5,6 +5,9 @@ use Illuminate\Support\Str;
 return [
     'default' => env('CACHE_DRIVER', 'file'),
 
+    // Laravel 13: never unserialize arbitrary PHP objects from the cache (all cached values here are arrays/scalars).
+    'serializable_classes' => false,
+
     'stores' => [
         'array' => [
             'driver' => 'array',

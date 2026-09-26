@@ -7,6 +7,9 @@ return [
     'lifetime' => env('SESSION_LIFETIME', 120),
     'expire_on_close' => false,
     'encrypt' => false,
+
+    // Laravel 13 default: JSON instead of PHP serialization blocks deserialization gadget-chain attacks.
+    'serialization' => env('SESSION_SERIALIZATION', 'json'),
     'files' => storage_path('framework/sessions'),
     'connection' => env('SESSION_CONNECTION'),
     'table' => 'sessions',

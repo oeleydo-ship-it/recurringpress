@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "laravel",
-      "runtimeExecutable": "php",
+      "runtimeExecutable": "C:/php84/php.exe",
       "runtimeArgs": ["artisan", "serve", "--host", "127.0.0.1", "--port", "8002"],
       "port": 8002
     }
