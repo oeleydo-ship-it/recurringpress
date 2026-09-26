@@ -19,7 +19,6 @@ use App\Http\Controllers\BlogController;
 use App\Http\Controllers\PublicQuotationController;
 use App\Http\Controllers\PublicInvoiceController;
 use App\Http\Controllers\RecurringInvoiceController;
-use App\Http\Controllers\InstallController;
 use App\Http\Controllers\UpdateController;
 use App\Http\Controllers\AutoInstallController;
 use App\Http\Controllers\OnboardingController;
