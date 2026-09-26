@@ -2,6 +2,7 @@ import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { ArrowRight, Building2, CreditCard, Palette, Percent, Rocket, Upload, Users } from 'lucide-react';
 import { Button } from '@/Components/ui';
 import { route } from '@/lib/route';
+import { useApplyTheme } from '@/lib/theme';
 import { themeStyle } from '@/lib/utils';
 
 const steps = [
@@ -15,6 +16,7 @@ const steps = [
 
 export default function Welcome({ userName, companyName, resumeStep }) {
     const { auth } = usePage().props;
+    useApplyTheme(auth?.theme);
     const skip = useForm({});
 
     return (

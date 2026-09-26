@@ -134,7 +134,9 @@ Route::middleware(['auth', 'tenant', 'verified', \App\Http\Middleware\CheckOnboa
     Route::resource('invoices', InvoiceController::class);
     Route::post('/invoices/{invoice}/send', [InvoiceController::class, 'send'])->name('invoices.send');
     Route::post('/invoices/{invoice}/email', [InvoiceController::class, 'email'])->name('invoices.email');
-    Route::match(['get', 'post'], '/invoices/{invoice}/paid', [InvoiceController::class, 'markPaid'])->name('invoices.paid');
+    // POST only: a GET here was CSRF-able (e.g. an <img> tag could record a fake payment).
+    Route::post('/invoices/{invoice}/paid', [InvoiceController::class, 'markPaid'])->name('invoices.paid');
+    Route::get('/invoices/{invoice}/preview', [InvoiceController::class, 'preview'])->name('invoices.preview');
     Route::get('/invoices/{invoice}/download', [InvoiceController::class, 'download'])->name('invoices.download');
     Route::post('/invoices/{invoice}/duplicate', [InvoiceController::class, 'duplicate'])->name('invoices.duplicate');
     Route::post('/invoices/{invoice}/payment', [PaymentController::class, 'recordManualPayment'])->name('invoices.payment');
@@ -169,7 +171,8 @@ Route::middleware(['auth', 'tenant', 'verified', \App\Http\Middleware\CheckOnboa
     Route::post('/quotations/{quotation}/email', [QuotationController::class, 'email'])->name('quotations.email');
     Route::post('/quotations/{quotation}/accept', [QuotationController::class, 'accept'])->name('quotations.accept');
     Route::post('/quotations/{quotation}/reject', [QuotationController::class, 'reject'])->name('quotations.reject');
-    Route::match(['get', 'post'], '/quotations/{quotation}/convert', [QuotationController::class, 'convert'])->name('quotations.convert');
+    // POST only: converting creates an invoice, so it must be CSRF-protected.
+    Route::post('/quotations/{quotation}/convert', [QuotationController::class, 'convert'])->name('quotations.convert');
     Route::get('/quotations/{quotation}/download', [QuotationController::class, 'download'])->name('quotations.download');
     Route::post('/quotations/{quotation}/duplicate', [QuotationController::class, 'duplicate'])->name('quotations.duplicate');
 

@@ -9,3 +9,4 @@ export { default as Pagination } from './Pagination';
 export { PageHeader, EmptyState, StatCard, Avatar, LinkTabs } from './Page';
 export { default as Tabs } from './Tabs';
 export { useFilters, SearchInput, FilterBar } from './SearchFilters';
+export { default as Combobox } from './Combobox';

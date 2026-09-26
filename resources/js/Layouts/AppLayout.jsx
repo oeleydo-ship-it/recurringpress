@@ -25,7 +25,8 @@ import {
 import { useEffect, useState } from 'react';
 import { Avatar, Button, Dropdown } from '@/Components/ui';
 import { isCurrent, route } from '@/lib/route';
-import { cn, formatDate, themeStyle } from '@/lib/utils';
+import { useApplyTheme } from '@/lib/theme';
+import { cn, formatDate } from '@/lib/utils';
 
 function navigation(company, user) {
     const groups = [
@@ -73,12 +74,11 @@ export default function AppLayout({ children }) {
 
     useEffect(() => setMobileOpen(false), [url]);
 
-    useEffect(() => {
-        document.documentElement.dataset.fontSize = theme.font_size ?? 'base';
-        document.body.dataset.site = site?.name ?? '';
-    }, [theme.font_size, site?.name]);
+    const style = useApplyTheme(theme);
 
-    const style = themeStyle(theme);
+    useEffect(() => {
+        document.body.dataset.site = site?.name ?? '';
+    }, [site?.name]);
 
     const groups = navigation(company, user);
 

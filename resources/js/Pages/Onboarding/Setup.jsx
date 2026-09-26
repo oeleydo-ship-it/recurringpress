@@ -4,6 +4,7 @@ import { useState } from 'react';
 import TemplateThumbnail from '@/Components/TemplateThumbnail';
 import { Badge, Button, FieldError, FormField, Input, Segmented, Select, Switch } from '@/Components/ui';
 import { route } from '@/lib/route';
+import { useApplyTheme } from '@/lib/theme';
 import { cn, formatMoney, themeStyle } from '@/lib/utils';
 
 const STEPS = [
@@ -18,6 +19,7 @@ const STEPS = [
 
 export default function Setup(props) {
     const { auth } = usePage().props;
+    useApplyTheme(auth?.theme);
     const [step, setStep] = useState(props.step);
     const [brand, setBrand] = useState(props.settings.primary_color);
     const current = STEPS[step - 1];

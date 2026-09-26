@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Client;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Illuminate\Support\Facades\DB;
 
 class ClientController extends Controller
 {
@@ -33,12 +35,28 @@ class ClientController extends Controller
             ->latest()
             ->paginate(15);
 
-        return view('clients.index', compact('clients'));
+        return Inertia::render('Clients/Index', [
+            'clients' => $clients->through(fn (Client $c) => [
+                'id' => $c->id,
+                'name' => $c->name,
+                'display_name' => $c->bill_to_name,
+                'client_type' => $c->client_type,
+                'company_name' => $c->company_name,
+                'email' => $c->email,
+                'phone' => $c->phone,
+                'city' => $c->city,
+                'country' => $c->country,
+                'is_active' => (bool) ($c->is_active ?? true),
+                'invoices_count' => $c->invoices_count,
+                'total_billed' => (float) $c->total_billed,
+            ]),
+            'filters' => $request->only('search', 'status'),
+        ]);
     }
 
     public function create()
     {
-        return view('clients.create');
+        return Inertia::render('Clients/Form', ['client' => null]);
     }
 
     public function store(Request $request)
@@ -92,19 +110,37 @@ class ClientController extends Controller
             }
         ]);
 
+        // Paid / outstanding use the per-invoice paid_amount so partial payments count.
         $stats = [
             'total_invoices' => $client->invoices()->count(),
-            'total_billed' => $client->invoices()->sum('total'),
-            'total_paid' => $client->invoices()->where('status', 'paid')->sum('total'),
-            'outstanding' => $client->invoices()->whereIn('status', ['sent', 'overdue'])->sum('total'),
+            'total_billed' => (float) $client->invoices()->where('status', '!=', 'cancelled')->sum('total'),
+            'total_paid' => (float) $client->invoices()->sum('paid_amount'),
+            'outstanding' => (float) $client->invoices()->whereIn('status', ['sent', 'viewed', 'partial', 'overdue'])
+                ->sum(DB::raw('total - COALESCE(paid_amount, 0)')),
         ];
 
-        return view('clients.show', compact('client', 'stats'));
+        return Inertia::render('Clients/Show', [
+            'client' => $this->clientPayload($client) + [
+                'bill_to_name' => $client->bill_to_name,
+                'full_address' => $client->full_address,
+                'created_at' => $client->created_at?->toDateString(),
+            ],
+            'invoices' => $client->invoices->map(fn ($i) => [
+                'id' => $i->id,
+                'invoice_number' => $i->invoice_number,
+                'issue_date' => $i->issue_date?->toDateString(),
+                'due_date' => $i->due_date?->toDateString(),
+                'total' => (float) $i->total,
+                'paid_amount' => (float) $i->paid_amount,
+                'status' => $i->status,
+            ]),
+            'stats' => $stats,
+        ]);
     }
 
     public function edit(Client $client)
     {
-        return view('clients.edit', compact('client'));
+        return Inertia::render('Clients/Form', ['client' => $this->clientPayload($client)]);
     }
 
     public function update(Request $request, Client $client)
@@ -145,5 +181,12 @@ class ClientController extends Controller
 
         return redirect()->route('clients.index')
             ->with('success', 'Client deleted successfully.');
+    }
+    private function clientPayload(Client $client): array
+    {
+        return $client->only([
+            'id', 'name', 'client_type', 'company_name', 'email', 'phone', 'tax_number',
+            'address', 'city', 'state', 'postal_code', 'country', 'notes',
+        ]) + ['is_active' => (bool) ($client->is_active ?? true)];
     }
 }
