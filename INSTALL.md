@@ -1,7 +1,8 @@
 # Invoice Manager Installation Guide
 
 Follow these steps to install the Invoice Manager application on your server.
-n> Full illustrated guide (cPanel, Plesk, DirectAdmin, other panels, VPS, and how to use the platform): open `docs/index.html` in a browser.
+
+> Full guide (cPanel, Plesk, DirectAdmin, other panels, VPS, and how to use the platform): open `docs/index.html` in a browser.
 
 ## Server Requirements
 
