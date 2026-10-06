@@ -85,7 +85,7 @@ class AutoInstallerService
 
         // PHP Version
         $requiredPhp = $this->manifest['requirements']['php']
-            ?? config('autoinstaller.php_version', '8.1.0');
+            ?? config('autoinstaller.php_version', '8.3.0');
 
         $phpPassed = version_compare(PHP_VERSION, $requiredPhp, '>=');
         $requirements['php'] = [

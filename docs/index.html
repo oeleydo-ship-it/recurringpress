@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Invoice Manager Documentation</title>
+<style>
+:root {
+  --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --border: #d1d9e0; --soft: #f6f8fa;
+  --link: #0969da; --code-bg: rgba(129,139,152,.12); --pre-bg: #f6f8fa;
+  --note: #0969da; --tip: #1a7f37; --warn: #9a6700; --danger: #cf222e;
+  --side: #f6f8fa;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --border: #3d444d; --soft: #151b23;
+    --link: #4493f8; --code-bg: rgba(101,108,118,.2); --pre-bg: #151b23;
+    --note: #4493f8; --tip: #3fb950; --warn: #d29922; --danger: #f85149; --side: #010409;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --border: #3d444d; --soft: #151b23;
+  --link: #4493f8; --code-bg: rgba(101,108,118,.2); --pre-bg: #151b23;
+  --note: #4493f8; --tip: #3fb950; --warn: #d29922; --danger: #f85149; --side: #010409;
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: 16px; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+}
+a { color: var(--link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.layout { display: flex; min-height: 100vh; }
+nav.toc {
+  width: 280px; flex-shrink: 0; position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  background: var(--side); border-right: 1px solid var(--border); padding: 24px 16px; font-size: 14px;
+}
+nav.toc .brand { font-weight: 600; font-size: 16px; margin: 0 8px 16px; }
+nav.toc ol { list-style: none; margin: 0; padding: 0; }
+nav.toc ol ol { padding-left: 14px; margin-bottom: 6px; }
+nav.toc a { display: block; padding: 3px 8px; border-radius: 6px; color: var(--fg); }
+nav.toc ol ol a { color: var(--muted); }
+nav.toc a:hover { background: var(--code-bg); text-decoration: none; }
+nav.toc .group { margin: 14px 8px 4px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+main { flex: 1; min-width: 0; }
+article.markdown-body { max-width: 900px; margin: 0 auto; padding: 32px 40px 96px; }
+.markdown-body h1, .markdown-body h2 { padding-bottom: .3em; border-bottom: 1px solid var(--border); }
+.markdown-body h1 { font-size: 2em; margin: 0 0 16px; }
+.markdown-body h2 { font-size: 1.5em; margin: 48px 0 16px; }
+.markdown-body h3 { font-size: 1.25em; margin: 32px 0 12px; }
+.markdown-body h4 { font-size: 1em; margin: 24px 0 8px; }
+.markdown-body h2 a.anchor, .markdown-body h3 a.anchor { color: var(--muted); margin-left: 6px; font-weight: 400; opacity: 0; }
+.markdown-body h2:hover a.anchor, .markdown-body h3:hover a.anchor { opacity: 1; }
+.markdown-body p, .markdown-body ul, .markdown-body ol, .markdown-body table, .markdown-body pre, .markdown-body blockquote { margin: 0 0 16px; }
+.markdown-body ul, .markdown-body ol { padding-left: 2em; }
+.markdown-body li + li { margin-top: .25em; }
+.markdown-body code {
+  font: 85%/1.4 ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: .2em .4em; border-radius: 6px; overflow-wrap: anywhere;
+}
+.markdown-body pre {
+  background: var(--pre-bg); border: 1px solid var(--border); border-radius: 6px;
+  padding: 16px; overflow-x: auto; position: relative;
+}
+.markdown-body pre code { background: none; padding: 0; font-size: 85%; white-space: pre; overflow-wrap: normal; }
+.copy-btn {
+  position: absolute; top: 8px; right: 8px; font: 12px/1 inherit; padding: 5px 8px; cursor: pointer;
+  color: var(--muted); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; opacity: 0;
+}
+pre:hover .copy-btn, .copy-btn:focus { opacity: 1; }
+.markdown-body table { border-collapse: collapse; display: block; overflow-x: auto; width: max-content; max-width: 100%; }
+.markdown-body th, .markdown-body td { border: 1px solid var(--border); padding: 6px 13px; vertical-align: top; }
+.markdown-body th { font-weight: 600; background: var(--soft); text-align: left; }
+.markdown-body tr:nth-child(2n) td { background: var(--soft); }
+.markdown-body hr { border: 0; height: 1px; background: var(--border); margin: 32px 0; }
+.markdown-body kbd {
+  font: 11px ui-monospace, monospace; padding: 3px 5px; border: 1px solid var(--border);
+  border-bottom-width: 2px; border-radius: 6px; background: var(--soft);
+}
+.alert { border-left: 4px solid; padding: 8px 16px; margin: 0 0 16px; border-radius: 0 6px 6px 0; background: var(--soft); }
+.alert > :last-child { margin-bottom: 0; }
+.alert .title { font-weight: 600; margin-bottom: 4px; }
+.alert.note { border-color: var(--note); } .alert.note .title { color: var(--note); }
+.alert.tip { border-color: var(--tip); } .alert.tip .title { color: var(--tip); }
+.alert.warning { border-color: var(--warn); } .alert.warning .title { color: var(--warn); }
+.alert.caution { border-color: var(--danger); } .alert.caution .title { color: var(--danger); }
+.lead { font-size: 1.15em; color: var(--muted); }
+.badges span { display: inline-block; font-size: 12px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; margin: 0 4px 4px 0; color: var(--muted); }
+details { border: 1px solid var(--border); border-radius: 6px; padding: 8px 16px; margin: 0 0 16px; }
+details summary { cursor: pointer; font-weight: 600; }
+details[open] summary { margin-bottom: 8px; }
+.steps { counter-reset: step; list-style: none; padding-left: 0 !important; }
+.steps > li { counter-increment: step; position: relative; padding-left: 40px; margin-bottom: 14px; }
+.steps > li::before {
+  content: counter(step); position: absolute; left: 0; top: 0; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--fg); color: var(--bg); font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center;
+}
+.theme-toggle {
+  position: fixed; top: 12px; right: 12px; z-index: 10; font: 13px inherit; padding: 6px 10px; cursor: pointer;
+  background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 6px;
+}
+.menu-toggle { display: none; }
+@media (max-width: 900px) {
+  .layout { display: block; }
+  nav.toc { display: none; position: fixed; inset: 0; width: auto; height: auto; z-index: 20; }
+  nav.toc.open { display: block; }
+  .menu-toggle {
+    display: inline-block; position: fixed; top: 12px; left: 12px; z-index: 30; font: 13px inherit; padding: 6px 10px;
+    background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+  }
+  article.markdown-body { padding: 64px 16px 64px; }
+}
+@media print {
+  nav.toc, .theme-toggle, .menu-toggle, .copy-btn { display: none !important; }
+  article.markdown-body { max-width: none; padding: 0; }
+}
+</style>
+</head>
+<body>
+<button class="menu-toggle" type="button" aria-controls="toc" aria-expanded="false">☰ Contents</button>
+<button class="theme-toggle" type="button" aria-label="Toggle dark mode">◐ Theme</button>
+
+<div class="layout">
+<nav class="toc" id="toc" aria-label="Table of contents">
+  <div class="brand">📄 Invoice Manager Docs</div>
+  <div class="group">Getting started</div>
+  <ol>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#requirements">Server requirements</a></li>
+    <li><a href="#package">What to upload</a></li>
+  </ol>
+  <div class="group">Installation</div>
+  <ol>
+    <li><a href="#cpanel">cPanel</a>
+      <ol>
+        <li><a href="#cp-php">1. Select PHP 8.3+</a></li>
+        <li><a href="#cp-db">2. Create the database</a></li>
+        <li><a href="#cp-upload">3. Upload &amp; extract</a></li>
+        <li><a href="#cp-docroot">4. Point domain to /public</a></li>
+        <li><a href="#cp-installer">5. Run the web installer</a></li>
+        <li><a href="#cp-cron">6. Add the cron job</a></li>
+        <li><a href="#cp-ssl">7. SSL &amp; hardening</a></li>
+      </ol>
+    </li>
+    <li><a href="#plesk">Plesk</a></li>
+    <li><a href="#directadmin">DirectAdmin</a></li>
+    <li><a href="#other-panels">aaPanel, CyberPanel, CloudPanel, HestiaCP</a></li>
+    <li><a href="#vps">VPS / command line</a></li>
+    <li><a href="#env">Environment (.env) reference</a></li>
+    <li><a href="#redis">Redis, queues &amp; Horizon</a></li>
+    <li><a href="#ssr">Server-side rendering (SSR)</a></li>
+  </ol>
+  <div class="group">Platform owner (Superadmin)</div>
+  <ol>
+    <li><a href="#sa-login">First login</a></li>
+    <li><a href="#sa-settings">System settings</a></li>
+    <li><a href="#sa-plans">Plans &amp; subscriptions</a></li>
+    <li><a href="#sa-tenants">Managing tenants</a></li>
+    <li><a href="#sa-payouts">Payouts</a></li>
+    <li><a href="#sa-content">Website, pages, blog &amp; menus</a></li>
+    <li><a href="#sa-reports">Reports</a></li>
+    <li><a href="#sa-updates">Updates &amp; backups</a></li>
+  </ol>
+  <div class="group">Business users (Tenants)</div>
+  <ol>
+    <li><a href="#t-signup">Sign up &amp; onboarding</a></li>
+    <li><a href="#t-settings">Company settings</a></li>
+    <li><a href="#t-clients">Clients &amp; products</a></li>
+    <li><a href="#t-quotations">Quotations</a></li>
+    <li><a href="#t-invoices">Invoices</a></li>
+    <li><a href="#t-recurring">Recurring invoices</a></li>
+    <li><a href="#t-payments">Payments &amp; receipts</a></li>
+    <li><a href="#t-payouts">Requesting payouts</a></li>
+    <li><a href="#t-expenses">Expenses &amp; reports</a></li>
+    <li><a href="#t-team">Team &amp; roles</a></li>
+    <li><a href="#t-clientview">What your client sees</a></li>
+  </ol>
+  <div class="group">Help</div>
+  <ol>
+    <li><a href="#maintenance">Maintenance &amp; upgrading</a></li>
+    <li><a href="#troubleshooting">Troubleshooting</a></li>
+    <li><a href="#security">Security checklist</a></li>
+  </ol>
+</nav>
+
+<main>
+<article class="markdown-body">
+
+<h1 id="top">Invoice Manager</h1>
+<p class="lead">A multi-tenant invoicing SaaS. Businesses sign up and create quotations and invoices, then get paid online by card. You, the platform owner, sell subscription plans and manage everything from a Superadmin panel.</p>
+<p class="badges"><span>Laravel 13</span><span>PHP 8.3+</span><span>React 19 + Inertia</span><span>MySQL / MariaDB</span><span>Stripe</span><span>Redis &amp; Horizon (optional)</span></p>
+
+<p>This guide has two parts. <a href="#cpanel">Installation</a> is for whoever sets up the server. The <a href="#sa-login">Superadmin</a> and <a href="#t-signup">Tenant</a> chapters explain how to use the platform day to day.</p>
+
+<!-- ============================================================ -->
+<h2 id="overview">Overview <a class="anchor" href="#overview">#</a></h2>
+
+<p>The platform has three kinds of users:</p>
+<table>
+  <thead><tr><th>Who</th><th>Where they sign in</th><th>What they do</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Superadmin</strong> (you, the platform owner)</td><td><code>/superadmin/login</code></td><td>Configures Stripe and email, creates subscription plans, manages tenants, approves payouts, and edits the public website, pages, blog and menus.</td></tr>
+    <tr><td><strong>Tenant users</strong> (a business: Owner, Admin, Member)</td><td><code>/login</code> (sign up at <code>/register</code>)</td><td>Manage clients, products, quotations, invoices, recurring invoices, expenses, payments and receipts for their own company. Each company's data is isolated from every other company.</td></tr>
+    <tr><td><strong>Clients</strong> (customers of a tenant)</td><td>No account needed: they use a private link</td><td>View, download and pay invoices, and accept or reject quotations.</td></tr>
+  </tbody>
+</table>
+
+<h3 id="features">Feature list</h3>
+<ul>
+  <li><strong>Quotations</strong> that clients accept or reject online, then convert to an invoice with one click. A client can also pay a quotation directly.</li>
+  <li><strong>Invoices</strong> with line items, tax and discount. There are 12 PDF templates, plus email sending, duplication, CSV export, manual payments and refunds.</li>
+  <li><strong>Recurring invoices</strong>, generated automatically on a schedule (pause, resume, cancel, or generate now).</li>
+  <li><strong>Online card payments</strong> through Stripe, using either the platform's account or the tenant's own account.</li>
+  <li><strong>Payments, receipts and payouts</strong> (payouts are for tenants paid through the platform Stripe account).</li>
+  <li><strong>Expenses</strong> with receipt uploads, plus <strong>reports</strong> and a dashboard.</li>
+  <li><strong>Team members</strong> with roles; <strong>subscription plans</strong> with usage limits.</li>
+  <li><strong>Marketing website</strong>: landing page, pricing, features, FAQ, contact, a blog and CMS pages with a block builder.</li>
+  <li><strong>Security</strong>: email verification, rate limiting, spam honeypots, security headers and per-company data isolation.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="requirements">Server requirements <a class="anchor" href="#requirements">#</a></h2>
+
+<table>
+  <thead><tr><th>Component</th><th>Requirement</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td>PHP</td><td><strong>8.3 or 8.4</strong> (8.4 recommended)</td><td>Laravel 13 will <em>not</em> run on PHP 8.2 or older.</td></tr>
+    <tr><td>PHP extensions</td><td>pdo, pdo_mysql, mbstring, tokenizer, xml, ctype, json, bcmath, openssl, fileinfo, zip, curl, gd</td><td>Usually all enabled by default on cPanel/Plesk.</td></tr>
+    <tr><td>Database</td><td>MySQL 5.7+ / 8.x or MariaDB 10.3+</td><td>utf8mb4 is used.</td></tr>
+    <tr><td>Web server</td><td>Apache (with <code>mod_rewrite</code>), LiteSpeed or Nginx</td><td>The document root must be the <code>public/</code> folder.</td></tr>
+    <tr><td>Cron</td><td>Ability to run one cron job every minute</td><td>Needed for recurring invoices, overdue and expiry checks.</td></tr>
+    <tr><td>Redis</td><td>6+ (<em>optional</em>)</td><td>Recommended on a VPS. Shared hosting can use file/database drivers instead (see <a href="#redis">Redis</a>).</td></tr>
+    <tr><td>Node.js</td><td>20.19+ / 22.12+ (<em>optional</em>)</td><td>Only needed to rebuild the front-end or to run SSR. The release package already contains the built files.</td></tr>
+    <tr><td>PHP settings</td><td><code>memory_limit</code> ≥ 256M, <code>upload_max_filesize</code> ≥ 10M, <code>max_execution_time</code> ≥ 120</td><td>PDF generation and the installer benefit from more memory and time.</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="package">What to upload <a class="anchor" href="#package">#</a></h2>
+
+<p>Upload the <strong>complete release package</strong>. On shared hosting you usually can't run Composer or npm, so the package must already contain:</p>
+<ul>
+  <li><code>vendor/</code>: the PHP dependencies (from <code>composer install --no-dev --optimize-autoloader</code>).</li>
+  <li><code>public/build/</code>: the compiled React front-end (from <code>npm ci &amp;&amp; npm run build</code>). Without it every page is blank.</li>
+  <li><code>bootstrap/ssr/</code>: the SSR bundle (only used if you run SSR).</li>
+  <li><code>install.json</code> in the project root. Its presence enables the web installer.</li>
+  <li><code>.env.example</code>. The installer copies it to <code>.env</code>.</li>
+</ul>
+<p>The package must <strong>not</strong> contain a <code>.env</code> file, <code>storage/installed</code>, <code>node_modules/</code>, logs, or anything in <code>storage/app/public</code> from your test machine.</p>
+
+<details>
+  <summary>Building the release package yourself (developers)</summary>
+<pre><code>composer install --no-dev --optimize-autoloader
+npm ci
+npm run build                      # builds public/build and bootstrap/ssr
+cp install.json.installed install.json   # if your copy only has the .installed version
+# then zip everything except: .env, node_modules, .git, storage/installed,
+# storage/logs/*, storage/framework/{cache,sessions,views}/*</code></pre>
+</details>
+
+<!-- ============================================================ -->
+<h2 id="cpanel">Installing on cPanel <a class="anchor" href="#cpanel">#</a></h2>
+
+<p>This walkthrough uses an example cPanel username <code>myuser</code> and domain <code>billing.example.com</code>. Replace both with your own.</p>
+
+<h3 id="cp-php">1. Select PHP 8.3 or 8.4 <a class="anchor" href="#cp-php">#</a></h3>
+<ol class="steps">
+  <li>In cPanel open <strong>Software → MultiPHP Manager</strong>. Tick your domain and set <strong>PHP Version</strong> to <code>ea-php83</code> or <code>ea-php84</code>, then click <strong>Apply</strong>.<br>
+  <small>On CloudLinux servers this is <strong>Select PHP Version</strong> instead. Choose 8.3/8.4 and enable the extensions listed above.</small></li>
+  <li>Open <strong>MultiPHP INI Editor</strong>, pick the domain, and set <code>memory_limit = 256M</code>, <code>upload_max_filesize = 10M</code>, <code>post_max_size = 12M</code> and <code>max_execution_time = 120</code>.</li>
+</ol>
+
+<h3 id="cp-db">2. Create the database <a class="anchor" href="#cp-db">#</a></h3>
+<ol class="steps">
+  <li>Open <strong>Databases → MySQL® Database Wizard</strong>.</li>
+  <li>Create a database, e.g. <code>myuser_invoice</code>.</li>
+  <li>Create a user, e.g. <code>myuser_invoice</code>, with a strong password (use the generator).</li>
+  <li>On the privileges screen tick <strong>ALL PRIVILEGES</strong> and finish.</li>
+  <li>Write down the <strong>database name</strong>, <strong>username</strong> and <strong>password</strong>. Note that cPanel adds your account prefix (<code>myuser_</code>) to both names.</li>
+</ol>
+
+<h3 id="cp-upload">3. Upload and extract the files <a class="anchor" href="#cp-upload">#</a></h3>
+<ol class="steps">
+  <li>Open <strong>Files → File Manager</strong> and go to your home folder <code>/home/myuser</code>. Use your home folder, not <code>public_html</code>.</li>
+  <li>Create a folder, e.g. <code>invoiceapp</code>, and upload the release <code>.zip</code> into it.</li>
+  <li>Right-click the zip → <strong>Extract</strong>. You should end up with <code>/home/myuser/invoiceapp/app</code>, <code>/home/myuser/invoiceapp/public</code>, <code>/home/myuser/invoiceapp/artisan</code> and so on (not an extra nested folder).</li>
+  <li>Select <code>storage</code> and <code>bootstrap/cache</code> → <strong>Permissions</strong> → <code>775</code>, with "Recurse into subdirectories" ticked.</li>
+</ol>
+<div class="alert tip"><div class="title">💡 Tip</div><p>Keeping the app <em>outside</em> <code>public_html</code> means <code>.env</code>, <code>vendor/</code> and <code>storage/</code> can never be downloaded from the web. Only the <code>public/</code> folder is exposed.</p></div>
+
+<h3 id="cp-docroot">4. Point the domain at the <code>public</code> folder <a class="anchor" href="#cp-docroot">#</a></h3>
+<p><strong>Recommended: use a subdomain or addon domain.</strong></p>
+<ol class="steps">
+  <li>Open <strong>Domains → Domains</strong> (older cPanel: <em>Subdomains</em> or <em>Addon Domains</em>).</li>
+  <li>Click <strong>Create A New Domain</strong> (or <em>Manage</em> on an existing one) and set the <strong>Document Root</strong> to <code>invoiceapp/public</code>.</li>
+  <li>Save. Visiting <code>https://billing.example.com</code> should now load the app.</li>
+</ol>
+
+<details>
+  <summary>Main domain whose document root is locked to <code>public_html</code></summary>
+  <p>Some hosts don't allow changing the primary domain's root. Use one of these options:</p>
+  <p><strong>Option A (symlink, preferred).</strong> Using cPanel <em>Terminal</em> or SSH:</p>
+<pre><code>cd ~
+mv public_html public_html.bak
+ln -s ~/invoiceapp/public ~/public_html</code></pre>
+  <p><strong>Option B (.htaccess forwarder).</strong> Upload the whole app <em>into</em> <code>public_html</code> and create <code>public_html/.htaccess</code> with:</p>
+<pre><code>&lt;IfModule mod_rewrite.c&gt;
+    RewriteEngine On
+    # Never serve hidden files (.env, .git) or app folders directly
+    RewriteRule ^(\.|app/|bootstrap/|config/|database/|resources/|routes/|storage/|vendor/|artisan|composer\.) - [F,L,NC]
+    RewriteRule ^(.*)$ public/$1 [L]
+&lt;/IfModule&gt;</code></pre>
+  <div class="alert warning"><div class="title">⚠️ Warning</div><p>Option B is a fallback. After installing, open <code>https://your-domain/.env</code> in a browser and confirm you get <strong>403 Forbidden</strong>. If the file downloads, remove the files immediately and use Option A instead.</p></div>
+</details>
+
+<h3 id="cp-installer">5. Run the web installer <a class="anchor" href="#cp-installer">#</a></h3>
+<p>Open your domain in a browser. Until installation finishes, every page redirects to <code>/install</code>.</p>
+<ol class="steps">
+  <li><strong>Welcome</strong>: shows the app name and version. Click <em>Start</em>.</li>
+  <li><strong>Requirements</strong>: PHP version, extensions and folder permissions must all show green. If something is red, fix it (step 1 or the permissions in step 3) and reload.</li>
+  <li><strong>Database</strong>: host <code>localhost</code>, port <code>3306</code>, and the database name, user and password from step 2. Click <em>Test connection</em> and then continue.</li>
+  <li><strong>Application</strong>: the site name and the exact URL including <code>https://</code> (e.g. <code>https://billing.example.com</code>). Email verification links are signed against this URL.</li>
+  <li><strong>Admin account</strong>: your name, company name, email and password. This becomes the <strong>Owner</strong> of the first tenant company (on the top plan), so you can try the business side straight away.</li>
+  <li><strong>Install</strong>: the installer writes <code>.env</code>, generates the app key, runs migrations and seeders (plans, system settings, CMS pages, Superadmin account), links storage and clears caches.</li>
+  <li><strong>Complete</strong>: an installed marker is written to <code>storage/installed</code>. The installer is now permanently disabled.</li>
+</ol>
+<div class="alert caution"><div class="title">🛑 Change the default Superadmin login immediately</div>
+<p>The seeder creates a platform Superadmin with email <code>admin@invoiceapp.com</code> and password <code>password</code>. Change both right after installing, as described in <a href="#sa-login">First login</a>. Until you do, anyone who knows the default can take over the platform.</p></div>
+
+<h3 id="cp-cron">6. Add the cron job <a class="anchor" href="#cp-cron">#</a></h3>
+<p>Open <strong>Advanced → Cron Jobs</strong>, choose <em>Once Per Minute (* * * * *)</em> and enter:</p>
+<pre><code>/usr/local/bin/php /home/myuser/invoiceapp/artisan schedule:run &gt;&gt; /dev/null 2&gt;&amp;1</code></pre>
+<p>If your account has several PHP versions, use the 8.3/8.4 binary explicitly, e.g. <code>/opt/cpanel/ea-php84/root/usr/bin/php</code>. Ask your host if you're unsure which path to use.</p>
+<p>The scheduler runs these tasks:</p>
+<table>
+  <thead><tr><th>Task</th><th>Frequency</th></tr></thead>
+  <tbody>
+    <tr><td>Generate due recurring invoices</td><td>Daily</td></tr>
+    <tr><td>Mark unpaid invoices as overdue</td><td>Daily</td></tr>
+    <tr><td>Expire old quotations</td><td>Daily</td></tr>
+    <tr><td>Check for platform updates</td><td>Daily</td></tr>
+    <tr><td>Horizon metrics snapshot (only if Horizon is used)</td><td>Every 5 minutes</td></tr>
+  </tbody>
+</table>
+
+<h3 id="cp-ssl">7. SSL, email and hardening <a class="anchor" href="#cp-ssl">#</a></h3>
+<ol class="steps">
+  <li><strong>Security → SSL/TLS Status</strong>: run <em>AutoSSL</em> for the domain so the site loads over <code>https://</code>.</li>
+  <li><strong>Email → Email Accounts</strong>: create e.g. <code>noreply@example.com</code>. You'll enter its SMTP details in the Superadmin panel (<a href="#sa-settings">System settings → Email</a>).</li>
+  <li>In File Manager edit <code>invoiceapp/.env</code> (enable <em>Show Hidden Files</em> in Settings) and confirm:
+<pre><code>APP_ENV=production
+APP_DEBUG=false
+APP_URL=https://billing.example.com
+SESSION_SECURE_COOKIE=true</code></pre></li>
+  <li>If your host doesn't offer Redis, switch to the shared-hosting drivers in the same file (see <a href="#redis">Redis</a>):
+<pre><code>CACHE_DRIVER=file
+SESSION_DRIVER=file
+QUEUE_CONNECTION=sync
+INERTIA_SSR_ENABLED=false</code></pre></li>
+</ol>
+<div class="alert note"><div class="title">ℹ️ Note</div><p>After editing <code>.env</code> on a live site, clear the config cache: run <code>php artisan config:clear</code> in cPanel <em>Terminal</em>, or wait for the next deploy. If you never ran <code>config:cache</code>, changes apply immediately.</p></div>
+
+<!-- ============================================================ -->
+<h2 id="plesk">Installing on Plesk <a class="anchor" href="#plesk">#</a></h2>
+<ol class="steps">
+  <li><strong>Websites &amp; Domains → (your domain) → PHP</strong>: choose PHP 8.3 or 8.4 (FPM served by Apache or Nginx), and raise <code>memory_limit</code> and <code>max_execution_time</code>.</li>
+  <li><strong>Databases → Add Database</strong>: create the database and a user, and note the credentials.</li>
+  <li><strong>Files</strong>: upload the zip to the domain folder (e.g. <code>/httpdocs/../invoiceapp</code> or <code>/invoiceapp</code>) and extract it.</li>
+  <li><strong>Hosting &amp; DNS → Hosting Settings</strong>: set <strong>Document root</strong> to <code>invoiceapp/public</code>.</li>
+  <li>If you use Nginx-only hosting, add this under <em>Apache &amp; nginx Settings → Additional nginx directives</em>:
+<pre><code>location / { try_files $uri $uri/ /index.php?$query_string; }</code></pre></li>
+  <li>Open the site and complete the <a href="#cp-installer">web installer</a>.</li>
+  <li><strong>Scheduled Tasks → Add Task</strong>: type <em>Run a PHP script</em>, script <code>invoiceapp/artisan</code>, arguments <code>schedule:run</code>, PHP 8.3/8.4, run <em>Cron style</em> <code>* * * * *</code>.</li>
+  <li><strong>SSL/TLS Certificates</strong>: install a free Let's Encrypt certificate and enable <em>Redirect from HTTP to HTTPS</em>.</li>
+</ol>
+<p>The Plesk <em>Laravel Toolkit</em> extension also works. Point it at <code>invoiceapp</code> and it handles the document root, Artisan and the scheduler for you.</p>
+
+<!-- ============================================================ -->
+<h2 id="directadmin">Installing on DirectAdmin <a class="anchor" href="#directadmin">#</a></h2>
+<ol class="steps">
+  <li><strong>Extra Features → PHP version selector</strong> (or <em>Domain Setup → PHP version</em>): choose 8.3 or 8.4.</li>
+  <li><strong>Account Manager → MySQL Management → Create new database</strong>.</li>
+  <li>Upload and extract the zip into <code>/home/USER/domains/example.com/invoiceapp</code>.</li>
+  <li>Make <code>public_html</code> point to the app's <code>public</code> folder (from SSH):
+<pre><code>cd ~/domains/example.com
+mv public_html public_html.bak
+ln -s invoiceapp/public public_html</code></pre></li>
+  <li>Run the <a href="#cp-installer">web installer</a>, then add a cron job under <strong>Advanced Features → Cron Jobs</strong>:
+<pre><code>* * * * * /usr/local/bin/php /home/USER/domains/example.com/invoiceapp/artisan schedule:run &gt;/dev/null 2&gt;&amp;1</code></pre></li>
+  <li>Enable a Let's Encrypt certificate under <strong>SSL Certificates</strong>.</li>
+</ol>
+
+<!-- ============================================================ -->
+<h2 id="other-panels">aaPanel, CyberPanel, CloudPanel, HestiaCP <a class="anchor" href="#other-panels">#</a></h2>
+<p>Every panel needs the same five things. This table shows where each one lives:</p>
+<table>
+  <thead><tr><th>Step</th><th>aaPanel</th><th>CyberPanel</th><th>CloudPanel</th><th>HestiaCP</th></tr></thead>
+  <tbody>
+    <tr><td>PHP 8.3/8.4</td><td>App Store → install PHP 8.4; Website → PHP version</td><td>Websites → Manage → Change PHP</td><td>Create a <em>PHP Site</em> (Laravel app template)</td><td>Web → Edit → Backend template <code>PHP-8_4</code></td></tr>
+    <tr><td>Database</td><td>Databases → Add</td><td>Databases → Create</td><td>Site → Databases</td><td>DB → Add</td></tr>
+    <tr><td>Document root → <code>/public</code></td><td>Website → Conf → Site directory → Running directory <code>/public</code></td><td>vHost Conf: <code>docRoot</code> → <code>…/public</code></td><td>Site Settings → Root directory <code>public</code></td><td>Edit → Advanced → custom document root</td></tr>
+    <tr><td>URL rewrite</td><td>Website → URL rewrite → <em>laravel5</em></td><td>Rewrite rules → Laravel</td><td>Included in the Laravel template</td><td>Proxy template <code>default</code> (Apache) handles <code>.htaccess</code></td></tr>
+    <tr><td>Cron</td><td>Cron → Shell script <code>php …/artisan schedule:run</code>, every minute</td><td>Websites → Cron Jobs</td><td>Site → Cron Jobs</td><td>Cron → Add</td></tr>
+  </tbody>
+</table>
+<p>On these VPS panels you normally have root access, so also follow <a href="#redis">Redis &amp; Horizon</a> for the best performance.</p>
+
+<!-- ============================================================ -->
+<h2 id="vps">VPS / command-line install <a class="anchor" href="#vps">#</a></h2>
+<p>This applies to Ubuntu 22.04/24.04 with Nginx, PHP-FPM 8.4, MySQL and Redis. The commands are a guide; adapt them to your distro.</p>
+<pre><code>sudo apt install nginx mysql-server redis-server supervisor \
+  php8.4-fpm php8.4-cli php8.4-mysql php8.4-mbstring php8.4-xml php8.4-bcmath \
+  php8.4-curl php8.4-zip php8.4-gd php8.4-intl
+cd /var/www &amp;&amp; sudo unzip invoiceapp.zip -d invoiceapp
+sudo chown -R www-data:www-data invoiceapp/storage invoiceapp/bootstrap/cache</code></pre>
+<p>Nginx server block:</p>
+<pre><code>server {
+    listen 80;
+    server_name billing.example.com;
+    root /var/www/invoiceapp/public;
+    index index.php;
+    client_max_body_size 12M;
+
+    location / { try_files $uri $uri/ /index.php?$query_string; }
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php8.4-fpm.sock;
+    }
+    location ~ /\.(?!well-known) { deny all; }
+}</code></pre>
+<p>Then open the site to run the web installer, or install from the CLI instead:</p>
+<pre><code>cp .env.example .env            # then edit DB_*, APP_URL, APP_ENV=production, APP_DEBUG=false
+php artisan key:generate
+php artisan migrate --seed --force
+php artisan storage:link
+php artisan optimize
+echo '{"installed_at":"'$(date -Iseconds)'"}' &gt; storage/installed   # disables the installer</code></pre>
+<p>Add the scheduler to the web user's crontab (<code>sudo crontab -u www-data -e</code>):</p>
+<pre><code>* * * * * php /var/www/invoiceapp/artisan schedule:run &gt;&gt; /dev/null 2&gt;&amp;1</code></pre>
+<p>Finish with HTTPS (<code>sudo certbot --nginx</code>), <a href="#redis">Horizon</a> and optionally <a href="#ssr">SSR</a>.</p>
+
+<!-- ============================================================ -->
+<h2 id="env">Environment (<code>.env</code>) reference <a class="anchor" href="#env">#</a></h2>
+<p>The installer writes the database and application values for you. Other keys you might change:</p>
+<table>
+  <thead><tr><th>Key</th><th>Example</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><code>APP_ENV</code> / <code>APP_DEBUG</code></td><td><code>production</code> / <code>false</code></td><td>Never leave debug on in production: it exposes stack traces and secrets.</td></tr>
+    <tr><td><code>APP_URL</code></td><td><code>https://billing.example.com</code></td><td>Must match the public URL exactly (links in emails, verification).</td></tr>
+    <tr><td><code>DB_*</code></td><td>host / port / database / username / password</td><td>Database connection.</td></tr>
+    <tr><td><code>CACHE_DRIVER</code></td><td><code>redis</code> or <code>file</code></td><td>Cache and rate-limit storage.</td></tr>
+    <tr><td><code>SESSION_DRIVER</code></td><td><code>redis</code> or <code>file</code></td><td>Login sessions.</td></tr>
+    <tr><td><code>QUEUE_CONNECTION</code></td><td><code>redis</code> or <code>sync</code></td><td><code>redis</code> runs emails and jobs in the background; <code>sync</code> runs them immediately during the request.</td></tr>
+    <tr><td><code>REDIS_HOST</code>, <code>REDIS_PASSWORD</code>, <code>REDIS_PORT</code></td><td><code>127.0.0.1</code> / <code>null</code> / <code>6379</code></td><td>Redis server.</td></tr>
+    <tr><td><code>REDIS_DB</code>, <code>REDIS_CACHE_DB</code>, <code>REDIS_PREFIX</code>, <code>HORIZON_PREFIX</code></td><td><code>0</code>, <code>1</code>, <code>invapp_</code>, <code>invapp_horizon:</code></td><td>Give each app its own values if several apps share one Redis server.</td></tr>
+    <tr><td><code>SESSION_SECURE_COOKIE</code></td><td><code>true</code></td><td>Send cookies over HTTPS only.</td></tr>
+    <tr><td><code>INERTIA_SSR_ENABLED</code></td><td><code>true</code> / <code>false</code></td><td>Turn server-side rendering off on hosts without a Node.js process.</td></tr>
+    <tr><td><code>DISPOSABLE_EMAIL_DOMAINS</code></td><td><code>foo.com,bar.net</code></td><td>Extra throw-away email domains to block at sign-up.</td></tr>
+    <tr><td><code>MAIL_*</code></td><td>SMTP values</td><td>Fallback only. Email is normally configured in <em>Superadmin → Email (SMTP)</em>.</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="redis">Redis, queues &amp; Horizon <a class="anchor" href="#redis">#</a></h2>
+<p>Choose the setup that matches your hosting:</p>
+<table>
+  <thead><tr><th></th><th>Shared hosting (no Redis)</th><th>VPS (recommended)</th></tr></thead>
+  <tbody>
+    <tr><td><code>.env</code></td><td><code>CACHE_DRIVER=file</code><br><code>SESSION_DRIVER=file</code><br><code>QUEUE_CONNECTION=sync</code></td><td><code>CACHE_DRIVER=redis</code><br><code>SESSION_DRIVER=redis</code><br><code>QUEUE_CONNECTION=redis</code></td></tr>
+    <tr><td>Emails</td><td>Sent during the request (a slightly slower click on "Send")</td><td>Queued and sent in the background with automatic retries</td></tr>
+    <tr><td>Worker</td><td>None needed</td><td>Laravel Horizon under Supervisor</td></tr>
+  </tbody>
+</table>
+<p>The Supervisor program for Horizon (<code>/etc/supervisor/conf.d/invoice-horizon.conf</code>):</p>
+<pre><code>[program:invoice-horizon]
+command=php /var/www/invoiceapp/artisan horizon
+user=www-data
+autostart=true
+autorestart=true
+redirect_stderr=true
+stdout_logfile=/var/www/invoiceapp/storage/logs/horizon.log
+stopwaitsecs=3600</code></pre>
+<pre><code>sudo supervisorctl reread &amp;&amp; sudo supervisorctl update &amp;&amp; sudo supervisorctl start invoice-horizon</code></pre>
+<ul>
+  <li>Horizon processes three queues: <code>high</code>, <code>default</code> and <code>mail</code>, each with 3 attempts.</li>
+  <li>The dashboard is at <code>/horizon</code> (also <em>Superadmin → Queues (Horizon)</em>). It is visible only to a signed-in Superadmin.</li>
+  <li>Horizon needs the <code>pcntl</code> and <code>posix</code> extensions, so it runs on Linux only. If your host doesn't allow it, run <code>php artisan queue:work redis --queue=high,default,mail --tries=3 --max-time=3600</code> under Supervisor instead.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="ssr">Server-side rendering (SSR) <a class="anchor" href="#ssr">#</a></h2>
+<p>With SSR, the server sends fully rendered HTML. The first paint is faster and search engines see the content of your marketing pages and blog. SSR is <strong>optional</strong>: without it, pages render in the browser and everything still works.</p>
+<ul>
+  <li><strong>Shared hosting:</strong> set <code>INERTIA_SSR_ENABLED=false</code>. Shared plans rarely allow a permanent Node.js process.</li>
+  <li><strong>VPS:</strong> install Node.js and keep the SSR server running with Supervisor:</li>
+</ul>
+<pre><code>[program:invoice-ssr]
+command=php /var/www/invoiceapp/artisan inertia:start-ssr
+user=www-data
+autostart=true
+autorestart=true
+redirect_stderr=true
+stdout_logfile=/var/www/invoiceapp/storage/logs/ssr.log</code></pre>
+<p>It listens on <code>127.0.0.1:13714</code>. After every front-end rebuild run <code>php artisan inertia:stop-ssr</code>; Supervisor then restarts it with the new bundle.</p>
+
+<hr>
+
+<!-- ============================================================ -->
+<h2 id="sa-login">Superadmin: first login <a class="anchor" href="#sa-login">#</a></h2>
+<p>The Superadmin login is at <code>https://your-domain/superadmin/login</code>. Before you use it, replace the default email and password. There is no profile page for the Superadmin yet, so you do this once from the command line. Use cPanel <strong>Advanced &rarr; Terminal</strong> or SSH:</p>
+<pre><code>cd ~/invoiceapp
+php artisan tinker --execute="echo App\Models\Superadmin::where('email','admin@invoiceapp.com')-&gt;update(['email'=&gt;'you@your-domain.com','password'=&gt;bcrypt('YOUR-LONG-UNIQUE-PASSWORD')]);"</code></pre>
+<p>It prints <code>1</code> when one account was updated. Without Terminal or SSH, add the same command as a one-off cPanel cron job: prefix it with <code>cd /home/myuser/invoiceapp &amp;&amp;</code> and use the full PHP path. Let it run once, then <strong>delete the cron job</strong> so the password doesn't stay in the cron list.</p>
+<ol class="steps">
+  <li>Sign in at <code>/superadmin/login</code> with your new email and password.</li>
+  <li>Work through <a href="#sa-settings">System settings</a> in this order: General, then Email, then Stripe, then Payouts.</li>
+</ol>
+<p>The Superadmin sidebar has four groups: <strong>Overview</strong> (Dashboard), <strong>Business</strong> (Tenants, Plans, Payouts, Reports), <strong>Content</strong> (Pages, Blog posts, Menus, Landing page) and <strong>System</strong> (General, Stripe, Email, Payout settings, Updates, Queues).</p>
+
+<h2 id="sa-settings">Superadmin: system settings <a class="anchor" href="#sa-settings">#</a></h2>
+
+<h3>General</h3>
+<p>Site name and tagline, logo and favicon (with an option to hide the name next to the logo), support and contact emails, footer text, and SEO description, keywords and share image. Here you can also:</p>
+<ul>
+  <li>Turn <strong>email verification</strong> for new sign-ups on or off. On is recommended because it blocks fake accounts.</li>
+  <li>Paste a <strong>Google Analytics</strong> or other tracking snippet and a <strong>live-chat</strong> widget script. They are added to the public website.</li>
+</ul>
+
+<h3>Email (SMTP)</h3>
+<p>Enter your mail server details: host, port (<code>465</code> SSL or <code>587</code> TLS), username, password, encryption and the <em>From</em> name and address. On cPanel use the email account you created and the host <code>mail.your-domain.com</code>. Saved passwords are never shown again; leave the field blank to keep the current one.</p>
+<div class="alert tip"><div class="title">💡 Tip</div><p>Test it by using <em>Forgot password</em> on a tenant account, or by emailing an invoice to yourself. Without working email, sign-up verification and invoice emails won't arrive.</p></div>
+
+<h3>Stripe (platform account)</h3>
+<ol class="steps">
+  <li>In your <a href="https://dashboard.stripe.com/apikeys">Stripe Dashboard → Developers → API keys</a> copy the <strong>publishable</strong> (<code>pk_…</code>) and <strong>secret</strong> (<code>sk_…</code>) keys for test and live mode.</li>
+  <li>Paste them, enable Stripe, and choose <strong>Test mode</strong> while you try things out.</li>
+  <li>In Stripe → <strong>Developers → Webhooks → Add endpoint</strong>, use the webhook URL shown on the settings page (<code>https://your-domain/stripe/webhook</code>) and select the event <code>payment_intent.succeeded</code>. Copy the signing secret (<code>whsec_…</code>) back into the settings.</li>
+  <li>When you're ready, switch to <strong>Live mode</strong>.</li>
+</ol>
+<p>The platform account collects <strong>subscription payments</strong> from tenants. It also collects invoice payments for every tenant that chooses <em>platform payments</em>; you later pay those tenants through <a href="#sa-payouts">Payouts</a>.</p>
+
+<h3>Payout settings</h3>
+<p>Set the <strong>platform fee percentage</strong> deducted from each payout and the <strong>minimum payout amount</strong> a tenant must have before requesting one.</p>
+
+<h2 id="sa-plans">Superadmin: plans &amp; subscriptions <a class="anchor" href="#sa-plans">#</a></h2>
+<p><strong>Business → Plans</strong>. Three plans are seeded: <em>Free Tier</em>, <em>Pro</em> and <em>Enterprise</em>. For each plan you can set:</p>
+<ul>
+  <li>Name, slug, description, price and billing cycle (monthly / yearly).</li>
+  <li>Limits: <strong>max invoices, clients, users, products</strong>. Leave a limit empty for unlimited.</li>
+  <li>Plan options: <em>online payments (Stripe)</em>, <em>custom branding</em> and <em>API access</em>.</li>
+  <li>A feature list and display order for the public <code>/pricing</code> page, <em>Popular</em> (highlights the plan) and <em>Active</em>.</li>
+</ul>
+<p>A plan that still has subscribed companies can't be deleted. Move those companies to another plan first, or deactivate the plan instead. Tenants upgrade themselves under <em>Settings → Subscription</em> and pay by card through the platform Stripe account.</p>
+
+<h2 id="sa-tenants">Superadmin: managing tenants <a class="anchor" href="#sa-tenants">#</a></h2>
+<p><strong>Business → Tenants</strong> lists every company and its owner. Search, then open a tenant to see its usage, plan and status. From <em>Edit</em> you can:</p>
+<ul>
+  <li>Update the user's name, email, phone and <strong>role</strong>, or <strong>deactivate</strong> the account so it can no longer sign in.</li>
+  <li>Change the company's <strong>plan</strong> and <strong>subscription status</strong> (<code>active</code>, <code>trial</code>, <code>cancelled</code>, <code>expired</code>). This is useful for support, comps or manual billing.</li>
+  <li>Delete the user.</li>
+</ul>
+<p>The <strong>Dashboard</strong> shows companies, MRR, paying customers, trials, the last 30 days of payment volume, pending payouts, and 12-month signup and volume charts.</p>
+
+<h2 id="sa-payouts">Superadmin: payouts <a class="anchor" href="#sa-payouts">#</a></h2>
+<p>When a tenant's clients pay through the <em>platform</em> Stripe account, that money is in your Stripe balance. Tenants request it back from their <em>Payouts</em> page.</p>
+<ol class="steps">
+  <li><strong>Business → Payouts</strong> lists requests by status (pending / completed / rejected).</li>
+  <li>Open a request to see the gross amount, the platform fee, the net amount to send, the included payments and the tenant's <strong>bank or PayPal details</strong> (each has a copy button).</li>
+  <li>Send the money from your bank or PayPal, then click <strong>Mark as completed</strong> and enter the transaction ID and optional notes.</li>
+  <li>Or click <strong>Reject</strong> with a reason. The payments are released so the tenant can request them again.</li>
+</ol>
+
+<h2 id="sa-content">Superadmin: website, pages, blog &amp; menus <a class="anchor" href="#sa-content">#</a></h2>
+<ul>
+  <li><strong>Landing page</strong>: hero texts, trust badges, feature cards and testimonials. Each list can be added to, removed from and reordered, and icons show a preview.</li>
+  <li><strong>Pages</strong>: create CMS pages at <code>/page/{slug}</code> (privacy, terms, about…). There are two editing modes: <em>Classic</em> (a rich-text editor with an HTML source view) and <em>Blocks</em>. Blocks is a page builder with hero, features, columns, image, call-to-action, FAQ and more. Toggle "Show title" and "Full width" as needed.</li>
+  <li><strong>Blog posts</strong>: title, slug, excerpt, featured image, rich-text content and publish status. Published posts appear at <code>/blog</code>.</li>
+  <li><strong>Menus</strong>: links for the header and footer locations. A link can be a site path (<code>/pricing</code>), an anchor (<code>#features</code>) or a full <code>https://</code> URL.</li>
+</ul>
+
+<h2 id="sa-reports">Superadmin: reports <a class="anchor" href="#sa-reports">#</a></h2>
+<p><strong>Business → Reports</strong> shows MRR, ARR, payment volume and platform fees for a chosen date range, plus monthly trends, active subscriptions per plan and the top companies by volume.</p>
+
+<h2 id="sa-updates">Superadmin: updates &amp; backups <a class="anchor" href="#sa-updates">#</a></h2>
+<p><strong>System → Updates</strong> checks the configured update server for a new version. <em>Download &amp; install</em> first backs up files and the database, then applies the update. Downloads are only accepted from the configured update-server host. Before any update, also take your own backup (cPanel <strong>Backup</strong> or <strong>JetBackup</strong>).</p>
+
+<hr>
+
+<!-- ============================================================ -->
+<h2 id="t-signup">Tenants: sign up &amp; onboarding <a class="anchor" href="#t-signup">#</a></h2>
+<ol class="steps">
+  <li>A business owner clicks <strong>Get started</strong> on the website, or goes to <code>/register</code>, and enters their name, company, email and password.</li>
+  <li>They confirm their email through the verification link. Sign-ups are protected by rate limits, a spam honeypot and a disposable-email block.</li>
+  <li>The <strong>onboarding wizard</strong> collects company details, logo, currency and invoice preferences. It can be skipped and finished later in Settings.</li>
+  <li>They land on the <strong>Dashboard</strong>: revenue, outstanding and overdue totals, recent invoices and quick actions.</li>
+</ol>
+
+<h2 id="t-settings">Tenants: company settings <a class="anchor" href="#t-settings">#</a></h2>
+<p><strong>Settings</strong> is available to Owners and Admins and has these tabs:</p>
+<table>
+  <thead><tr><th>Tab</th><th>What you set</th></tr></thead>
+  <tbody>
+    <tr><td>Company</td><td>Legal name, address, tax/VAT number, logo, currency, contact details.</td></tr>
+    <tr><td>Invoices</td><td>Numbering prefix and start number, default due days, tax, <strong>PDF template</strong> (12 designs, with live preview).</td></tr>
+    <tr><td>Quotations</td><td>Numbering, validity period, template.</td></tr>
+    <tr><td>Payments</td><td>Accept card payments; choose <strong>platform payments</strong> (no Stripe account needed, paid out via Payouts) or <strong>your own Stripe account</strong> (paste your keys and webhook secret; the money goes straight to you).</td></tr>
+    <tr><td>Appearance</td><td>Brand colors, sidebar colors, font and size for the app and documents.</td></tr>
+    <tr><td>Preferences</td><td>Date format and timezone.</td></tr>
+    <tr><td>Notes &amp; terms</td><td>Default notes and terms printed on every invoice and quotation.</td></tr>
+  </tbody>
+</table>
+<p><strong>Settings → Subscription</strong> shows the current plan and its usage, and lets you upgrade with a card.</p>
+
+<h2 id="t-clients">Tenants: clients &amp; products <a class="anchor" href="#t-clients">#</a></h2>
+<ul>
+  <li><strong>Clients</strong>: name, company, email, phone, billing address and tax number. A client's page shows all their invoices, quotations and payments. You can also add a client on the fly from the invoice editor ("Quick add").</li>
+  <li><strong>Products</strong>: products and services with a price, unit and tax rate. Pick them while writing invoices to fill line items instantly.</li>
+</ul>
+
+<h2 id="t-quotations">Tenants: quotations <a class="anchor" href="#t-quotations">#</a></h2>
+<ol class="steps">
+  <li><strong>Quotations → New</strong>: choose the client, add line items (from products or free text), discount, tax, notes and an expiry date.</li>
+  <li><strong>Send</strong> emails the client a secure link. <em>Download</em> gives you the PDF.</li>
+  <li>The client <strong>accepts</strong> or <strong>rejects</strong> online, and can pay immediately if card payments are on. You can also mark it accepted or rejected yourself.</li>
+  <li><strong>Convert to invoice</strong> creates an invoice from an accepted quotation with one click.</li>
+</ol>
+<p>Expired quotations are marked automatically each day.</p>
+
+<h2 id="t-invoices">Tenants: invoices <a class="anchor" href="#t-invoices">#</a></h2>
+<ol class="steps">
+  <li><strong>Invoices → New</strong>: client, issue and due dates, line items, discount, tax, notes and terms. The totals and the preview update live.</li>
+  <li>Save as draft, then <strong>Send</strong> (emails the client a secure link with a PDF) or copy the public link yourself.</li>
+  <li>Track the status: <em>draft → sent → partially paid → paid</em>, or <em>overdue</em> (set automatically after the due date).</li>
+  <li>Record payments: the client pays online by card, or you click <strong>Record payment</strong> for cash or bank transfers (partial payments are allowed). <em>Mark as paid</em> settles the full balance.</li>
+  <li>Other actions: <em>Duplicate</em>, <em>Download PDF</em>, <em>Preview</em>, <em>Delete</em>, and <em>Export</em> (CSV) from the list page.</li>
+</ol>
+
+<h2 id="t-recurring">Tenants: recurring invoices <a class="anchor" href="#t-recurring">#</a></h2>
+<p>Use these for retainers and subscriptions. Create a template with a name, the client, line items, discount, notes and terms. Then set the <strong>billing cycle</strong> (weekly, monthly, quarterly, every 6 months or yearly), the start date, and optionally an end date or a limit on how many cycles to bill. Tick <strong>Auto-send</strong> to email each generated invoice to the client automatically.</p>
+<ul>
+  <li>The daily scheduler generates due invoices. This needs the <a href="#cp-cron">cron job</a>.</li>
+  <li><strong>Pause</strong>, <strong>Resume</strong>, <strong>Cancel</strong> or <strong>Generate now</strong> at any time.</li>
+</ul>
+
+<h2 id="t-payments">Tenants: payments &amp; receipts <a class="anchor" href="#t-payments">#</a></h2>
+<ul>
+  <li><strong>Payments</strong> lists every payment (card or manual) with its method, date and invoice. Open one to see details or issue a <strong>refund</strong>.</li>
+  <li><strong>Receipts</strong> are created for payments. Preview them, or download them as PDF to send to clients.</li>
+</ul>
+
+<h2 id="t-payouts">Tenants: requesting payouts <a class="anchor" href="#t-payouts">#</a></h2>
+<p>This applies only when you use <em>platform payments</em>. The <strong>Payouts</strong> page shows your <em>available</em> balance (card payments not yet paid out, minus refunds), the amount pending and the total paid out.</p>
+<ol class="steps">
+  <li>Click <strong>Request payout</strong>. The whole available balance is requested at once, and it must be at least the platform's minimum.</li>
+  <li>Choose <strong>bank transfer</strong> (bank name, account name, account number or IBAN, and optionally routing/SWIFT) or <strong>PayPal</strong> (PayPal email). Your bank details are pre-filled from earlier requests.</li>
+  <li>The platform fee is deducted and you'll see the net amount. The request then shows <em>completed</em> (with the transaction ID) or <em>rejected</em> (with a reason; the payments become available again).</li>
+</ol>
+
+<h2 id="t-expenses">Tenants: expenses &amp; reports <a class="anchor" href="#t-expenses">#</a></h2>
+<ul>
+  <li><strong>Expenses</strong>: record business costs with a title, category, amount, tax, date, vendor and reference. You can mark an expense as billable to a client and attach a photo or PDF of the receipt (up to 5 MB). The list filters by category and date and shows the totals.</li>
+  <li><strong>Reports</strong>: revenue and other key figures with charts. Pick a period such as this or last month, quarter or year, or set a custom range.</li>
+</ul>
+
+<h2 id="t-team">Tenants: team &amp; roles <a class="anchor" href="#t-team">#</a></h2>
+<table>
+  <thead><tr><th>Role</th><th>Can do</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Owner</strong></td><td>Everything, including subscription, settings and team management.</td></tr>
+    <tr><td><strong>Admin</strong></td><td>Everything an Owner can, including Settings and Users.</td></tr>
+    <tr><td><strong>Member</strong></td><td>Day-to-day work: clients, products, quotations, invoices, recurring invoices, payments, expenses, reports. No access to Settings or Users.</td></tr>
+  </tbody>
+</table>
+<p>Invite people under <strong>Users → Add user</strong>. The number of users is limited by the company's plan.</p>
+
+<h2 id="t-clientview">What your client sees <a class="anchor" href="#t-clientview">#</a></h2>
+<p>A client opens the link from the email (<code>/invoice/{token}</code> or <code>/quotation/{token}</code>). The link is long and unguessable, and no account is needed. On that page the client can:</p>
+<ul>
+  <li>View the branded document and download the PDF.</li>
+  <li><strong>Pay by card</strong> through Stripe. The invoice updates to paid instantly, and a receipt is recorded.</li>
+  <li>For quotations: accept, reject, or accept and pay.</li>
+</ul>
+
+<hr>
+
+<!-- ============================================================ -->
+<h2 id="maintenance">Maintenance &amp; upgrading <a class="anchor" href="#maintenance">#</a></h2>
+<p><strong>Back up</strong> the database and the <code>storage/app</code> folder (uploaded logos, receipts, media) regularly.</p>
+<p>To upgrade manually with a new release package:</p>
+<ol class="steps">
+  <li>Back up the files and the database.</li>
+  <li>Upload the new files over the old ones. Keep your <code>.env</code> and <code>storage/</code>, and don't upload <code>install.json</code> again.</li>
+  <li>Run the following via SSH or cPanel <em>Terminal</em>:
+<pre><code>php artisan down
+php artisan migrate --force
+php artisan optimize:clear &amp;&amp; php artisan optimize
+php artisan horizon:terminate      # only if you use Horizon
+php artisan inertia:stop-ssr       # only if you use SSR
+php artisan up</code></pre></li>
+</ol>
+<p>Without SSH, you can create a temporary cPanel cron job that runs <code>php …/artisan migrate --force</code> once, then delete it.</p>
+
+<h2 id="troubleshooting">Troubleshooting <a class="anchor" href="#troubleshooting">#</a></h2>
+<table>
+  <thead><tr><th>Symptom</th><th>Cause and fix</th></tr></thead>
+  <tbody>
+    <tr><td>Blank white page, or a "500 Server Error"</td><td>Usually the PHP version. Make sure the domain uses PHP 8.3/8.4 (MultiPHP Manager). Then check <code>storage/logs/laravel.log</code>.</td></tr>
+    <tr><td>"Installation Not Available"</td><td><code>install.json</code> is missing from the project root. Upload it, or rename <code>install.json.installed</code> to <code>install.json</code>.</td></tr>
+    <tr><td>Redirected to <code>/install</code> after installing</td><td><code>storage/installed</code> is missing, or <code>storage</code> isn't writable. Fix the permissions (775).</td></tr>
+    <tr><td>Page loads but is unstyled or empty</td><td><code>public/build</code> is missing. Upload it or run <code>npm run build</code>. Also make sure a stray <code>public/hot</code> file isn't present.</td></tr>
+    <tr><td>404 on every page except the home page</td><td>URL rewriting is off. Enable <code>mod_rewrite</code> or <code>.htaccess</code> (Apache), or add the <code>try_files</code> rule (Nginx).</td></tr>
+    <tr><td>Logos or uploaded images don't show</td><td>The storage link is missing. Run <code>php artisan storage:link</code>, or ask your host to allow symlinks.</td></tr>
+    <tr><td>"Connection refused [tcp://127.0.0.1:6379]"</td><td>Redis isn't available. Switch to the file/sync drivers (<a href="#redis">Redis</a>).</td></tr>
+    <tr><td>Emails don't arrive</td><td>Check <em>Superadmin → Email (SMTP)</em>. With <code>QUEUE_CONNECTION=redis</code>, make sure Horizon/the worker is running. Check spam folders and SPF/DKIM records (cPanel → <em>Email Deliverability</em>).</td></tr>
+    <tr><td>Recurring invoices aren't created</td><td>The cron job isn't running or uses the wrong PHP binary. Test by running the command manually.</td></tr>
+    <tr><td>Card payment succeeds but the invoice stays unpaid</td><td>Webhook problem. Check the endpoint URL, the <code>payment_intent.succeeded</code> event and the <code>whsec_…</code> secret (in Superadmin for platform payments, in tenant Settings for own-account payments).</td></tr>
+    <tr><td>"Page expired" (419)</td><td>The session timed out, or <code>APP_URL</code>/HTTPS doesn't match the address in the browser. Reload and try again; fix <code>APP_URL</code> and <code>SESSION_SECURE_COOKIE</code>.</td></tr>
+    <tr><td>"Too many requests" (429)</td><td>The rate limiter is protecting login and sign-up. Wait a minute.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="security">Security checklist <a class="anchor" href="#security">#</a></h2>
+<ul>
+  <li>☐ The default Superadmin email and password have been changed.</li>
+  <li>☐ <code>APP_ENV=production</code> and <code>APP_DEBUG=false</code>.</li>
+  <li>☐ The document root is <code>public/</code>; <code>https://your-domain/.env</code> returns 403/404.</li>
+  <li>☐ HTTPS is enforced, and <code>SESSION_SECURE_COOKIE=true</code>.</li>
+  <li>☐ Stripe webhook secrets are set; live keys are used only after testing in test mode.</li>
+  <li>☐ Daily backups of the database and <code>storage/app</code> are in place.</li>
+  <li>☐ <code>install.json</code> is no longer in the root, or <code>storage/installed</code> exists. Both disable the installer.</li>
+  <li>☐ PHP and the server are kept up to date.</li>
+</ul>
+
+<p style="margin-top:48px;color:var(--muted);font-size:14px">Invoice Manager documentation · <a href="#top">Back to top ↑</a></p>
+</article>
+</main>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  try { var t = localStorage.getItem('docs-theme'); if (t) root.setAttribute('data-theme', t); } catch (e) {}
+  document.querySelector('.theme-toggle').addEventListener('click', function () {
+    var dark = root.getAttribute('data-theme') === 'dark' ||
+      (!root.getAttribute('data-theme') && matchMedia('(prefers-color-scheme: dark)').matches);
+    var next = dark ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('docs-theme', next); } catch (e) {}
+  });
+
+  var toc = document.getElementById('toc'), menuBtn = document.querySelector('.menu-toggle');
+  menuBtn.addEventListener('click', function () {
+    var open = toc.classList.toggle('open');
+    menuBtn.setAttribute('aria-expanded', open);
+  });
+  toc.addEventListener('click', function (e) {
+    if (e.target.tagName === 'A') { toc.classList.remove('open'); menuBtn.setAttribute('aria-expanded', 'false'); }
+  });
+
+  document.querySelectorAll('pre').forEach(function (pre) {
+    var btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'copy-btn'; btn.textContent = 'Copy';
+    btn.addEventListener('click', function () {
+      var text = pre.querySelector('code').innerText;
+      (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(
+        function () { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1500); },
+        function () { btn.textContent = 'Select & copy'; }
+      );
+    });
+    pre.appendChild(btn);
+  });
+})();
+</script>
+</body>
+</html>
