@@ -451,6 +451,7 @@ echo '{"installed_at":"'$(date -Iseconds)'"}' &gt; storage/installed   # disable
 <p>When a hosting platform deploys straight from the GitHub repository (push-to-deploy, Laravel Forge, Ploi, Laravel Cloud and similar), the web installer is <strong>not used</strong>. The repository has no <code>install.json</code> (only <code>install.json.installed</code>), and without it the app never redirects to <code>/install</code> and the installer URLs return 404, even though <code>storage/installed</code> doesn't exist. Set the environment variables in the platform's dashboard instead, and let the deploy script set up the app.</p>
 <ol class="steps">
   <li>Set the environment: at least <code>APP_KEY</code> (from <code>php artisan key:generate --show</code>), <code>APP_URL</code>, <code>APP_ENV=production</code>, <code>APP_DEBUG=false</code> and the <code>DB_*</code> values. See the <a href="#env">.env reference</a> for the rest.</li>
+  <li>Also set <code>SUPERADMIN_EMAIL</code> and <code>SUPERADMIN_PASSWORD</code> (at least 8 characters with upper and lowercase letters and a number). After every <code>php artisan migrate</code>, the app creates the Superadmin with this login if no Superadmin exists yet. It never changes an existing one, so you can delete <code>SUPERADMIN_PASSWORD</code> from the environment after the first deploy.</li>
   <li>Use a deploy script like this one:
 <pre><code>composer install --no-dev --optimize-autoloader
 npm ci &amp;&amp; npm run build
@@ -458,8 +459,10 @@ php artisan migrate --force
 php artisan db:seed --force      # safe to repeat; it never resets an existing Superadmin
 php artisan storage:link
 php artisan optimize</code></pre></li>
-  <li>The first <code>db:seed</code> creates the default Superadmin <code>admin@invoiceapp.com</code> / <code>password</code> and prints a warning in the deploy log. Sign in at <code>/superadmin/login</code> straight after the first deploy and change both under <strong>Your account</strong> (see <a href="#sa-login">First login</a>).</li>
+  <li>Check the deploy log for <em>Created the superadmin …</em>, then sign in at <code>/superadmin/login</code>. If the log says the login was rejected, fix the variables and deploy again.</li>
+  <li>Already deployed without them? Either add the variables and redeploy (works while no Superadmin exists), or run <code>php artisan superadmin:create</code> once in the platform's console or SSH. It asks for the email and password.</li>
 </ol>
+<p>If <code>db:seed</code> runs with no <code>SUPERADMIN_*</code> variables set and no Superadmin exists, it falls back to the default <code>admin@invoiceapp.com</code> / <code>password</code> and prints a warning. Change that login under <strong>Your account</strong> straight away.</p>
 <p>To switch the installer off completely, whatever files are present, set <code>AUTOINSTALLER_ENABLED=false</code>.</p>
 
 <!-- ============================================================ -->
@@ -537,7 +540,10 @@ stdout_logfile=/var/www/invoiceapp/storage/logs/ssr.log</code></pre>
   <li>Work through <a href="#sa-settings">System settings</a> in this order: General, then Email, then Stripe, then Payouts.</li>
 </ol>
 <h3 id="sa-login-recovery">Recovery: reset the login from the command line <a class="anchor" href="#sa-login-recovery">#</a></h3>
-<p>If you are locked out (forgotten password, or an email address you can no longer use), set a new email and password with tinker. Use cPanel <strong>Advanced &rarr; Terminal</strong> or SSH, and replace <code>CURRENT-EMAIL</code> with the Superadmin's current email:</p>
+<p>If you are locked out, reset the password from the command line (cPanel <strong>Advanced &rarr; Terminal</strong>, SSH, or your host's console). It asks for the password without showing it:</p>
+<pre><code>cd ~/invoiceapp
+php artisan superadmin:create --email=you@your-domain.com</code></pre>
+<p>If the email belongs to an existing Superadmin, the command asks before resetting its password; otherwise it creates a new Superadmin. To change the email itself, use tinker instead, replacing <code>CURRENT-EMAIL</code> with the Superadmin's current email:</p>
 <pre><code>cd ~/invoiceapp
 php artisan tinker --execute="echo App\Models\Superadmin::where('email','CURRENT-EMAIL')-&gt;update(['email'=&gt;'you@your-domain.com','password'=&gt;bcrypt('YOUR-LONG-UNIQUE-PASSWORD')]);"</code></pre>
 <p>It prints <code>1</code> when one account was updated. If you don't know the current email, list the accounts with <code>php artisan tinker --execute="echo App\Models\Superadmin::pluck('email');"</code>. Without Terminal or SSH, add the command as a one-off cPanel cron job: prefix it with <code>cd /home/myuser/invoiceapp &amp;&amp;</code> and use the full PHP path. Let it run once, then <strong>delete the cron job</strong> so the password doesn't stay in the cron list.</p>

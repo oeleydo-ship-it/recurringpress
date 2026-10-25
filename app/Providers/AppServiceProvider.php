@@ -10,6 +10,12 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Database\Events\MigrationsEnded;
+use Illuminate\Database\Events\NoPendingMigrations;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Log;
+use App\Services\SuperadminProvisioner;
+use Symfony\Component\Console\Output\ConsoleOutput;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -25,6 +31,8 @@ class AppServiceProvider extends ServiceProvider
         }
 
         Paginator::useBootstrapFive();
+
+        $this->provisionSuperadminAfterMigrations();
 
         $this->configureRateLimiting();
 
@@ -70,6 +78,35 @@ class AppServiceProvider extends ServiceProvider
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error('AppServiceProvider Mail Config Error: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Git / auto deployments usually run only `php artisan migrate --force`. After it, create the
+     * first superadmin from SUPERADMIN_EMAIL / SUPERADMIN_PASSWORD if none exists yet.
+     * NoPendingMigrations covers deploys with nothing new to migrate.
+     */
+    protected function provisionSuperadminAfterMigrations(): void
+    {
+        if (!$this->app->runningInConsole()) {
+            return;
+        }
+
+        Event::listen([MigrationsEnded::class, NoPendingMigrations::class], function () {
+            try {
+                $result = $this->app->make(SuperadminProvisioner::class)->ensureFromConfig();
+            } catch (\Throwable $e) {
+                Log::warning('Superadmin provisioning after migrate failed: ' . $e->getMessage());
+
+                return;
+            }
+
+            $output = new ConsoleOutput();
+            if ($result['status'] === 'created') {
+                $output->writeln('<info>' . $result['message'] . '</info>');
+            } elseif ($result['status'] === 'invalid') {
+                $output->writeln('<error>SUPERADMIN_EMAIL / SUPERADMIN_PASSWORD rejected: ' . $result['message'] . '</error>');
+            }
+        });
     }
 
     /**
