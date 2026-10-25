@@ -4,7 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Services\AutoInstallerService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Password;
 
 class AutoInstallController extends Controller
 {
@@ -181,10 +184,13 @@ class AutoInstallController extends Controller
             'email' => 'required|email|max:255',
             'password' => 'required|string|min:8|confirmed',
             'company_name' => 'required|string|max:255',
+            // Platform superadmin login: replaces the seeder's well-known default account.
+            'superadmin_email' => 'required|email:rfc,filter|max:255',
+            'superadmin_password' => ['required', 'string', 'confirmed', Password::defaults()],
         ]);
 
         if ($validator->fails()) {
-            return back()->withErrors($validator)->withInput();
+            return back()->withErrors($validator)->withInput($request->except('password', 'password_confirmation', 'superadmin_password', 'superadmin_password_confirmation'));
         }
 
         session([
@@ -193,6 +199,9 @@ class AutoInstallController extends Controller
                 'email' => $request->email,
                 'password' => $request->password,
                 'company_name' => $request->company_name,
+                'superadmin_email' => Str::lower(trim($request->superadmin_email)),
+                // Hashed now so the plaintext never sits in the session.
+                'superadmin_password_hash' => Hash::make($request->superadmin_password),
             ]
         ]);
 

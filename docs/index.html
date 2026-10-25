@@ -321,12 +321,17 @@ ln -s ~/invoiceapp/public ~/public_html</code></pre>
   <li><strong>Requirements</strong>: PHP version, extensions and folder permissions must all show green. If something is red, fix it (step 1 or the permissions in step 3) and reload.</li>
   <li><strong>Database</strong>: host <code>localhost</code>, port <code>3306</code>, and the database name, user and password from step 2. Click <em>Test connection</em> and then continue.</li>
   <li><strong>Application</strong>: the site name and the exact URL including <code>https://</code> (e.g. <code>https://billing.example.com</code>). Email verification links are signed against this URL.</li>
-  <li><strong>Admin account</strong>: your name, company name, email and password. This becomes the <strong>Owner</strong> of the first tenant company (on the top plan), so you can try the business side straight away.</li>
-  <li><strong>Install</strong>: the installer writes <code>.env</code>, generates the app key, runs migrations and seeders (plans, system settings, CMS pages, Superadmin account), links storage and clears caches.</li>
+  <li><strong>Admin account</strong>: two logins.
+    <ul>
+      <li>Your name, company name, email and password. This becomes the <strong>Owner</strong> of the first tenant company (on the top plan), so you can try the business side straight away.</li>
+      <li><strong>Platform Superadmin login</strong>: a separate email and password for <code>/superadmin/login</code>. The password needs at least 8 characters with upper and lowercase letters and a number. Don't reuse the Owner password.</li>
+    </ul>
+  </li>
+  <li><strong>Install</strong>: the installer writes <code>.env</code>, generates the app key, runs migrations, creates the Superadmin with the login from the previous step, runs the seeders (plans, system settings, CMS pages), links storage and clears caches.</li>
   <li><strong>Complete</strong>: an installed marker is written to <code>storage/installed</code>. The installer is now permanently disabled.</li>
 </ol>
-<div class="alert caution"><div class="title">🛑 Change the default Superadmin login immediately</div>
-<p>The seeder creates a platform Superadmin with email <code>admin@invoiceapp.com</code> and password <code>password</code>. Change both right after installing, as described in <a href="#sa-login">First login</a>. Until you do, anyone who knows the default can take over the platform.</p></div>
+<div class="alert caution"><div class="title">🛑 Installs from the command line get a default Superadmin login</div>
+<p>The web installer uses the Superadmin email and password you enter, so it creates no default login. If you install without it (<code>php artisan migrate --seed</code> or <code>php artisan db:seed</code> on an empty database), the seeder creates a Superadmin with email <code>admin@invoiceapp.com</code> and password <code>password</code> and prints a warning. Change both right away, as described in <a href="#sa-login">First login</a>. Until you do, anyone who knows the default can take over the platform. Running the seeder again later never resets or adds a Superadmin once one exists.</p></div>
 
 <h3 id="cp-cron">6. Add the cron job <a class="anchor" href="#cp-cron">#</a></h3>
 <p>Open <strong>Advanced → Cron Jobs</strong>, choose <em>Once Per Minute (* * * * *)</em> and enter:</p>
@@ -508,14 +513,17 @@ stdout_logfile=/var/www/invoiceapp/storage/logs/ssr.log</code></pre>
 
 <!-- ============================================================ -->
 <h2 id="sa-login">Superadmin: first login <a class="anchor" href="#sa-login">#</a></h2>
-<p>The Superadmin login is at <code>https://your-domain/superadmin/login</code>. Before you use it, replace the default email and password. There is no profile page for the Superadmin yet, so you do this once from the command line. Use cPanel <strong>Advanced &rarr; Terminal</strong> or SSH:</p>
-<pre><code>cd ~/invoiceapp
-php artisan tinker --execute="echo App\Models\Superadmin::where('email','admin@invoiceapp.com')-&gt;update(['email'=&gt;'you@your-domain.com','password'=&gt;bcrypt('YOUR-LONG-UNIQUE-PASSWORD')]);"</code></pre>
-<p>It prints <code>1</code> when one account was updated. Without Terminal or SSH, add the same command as a one-off cPanel cron job: prefix it with <code>cd /home/myuser/invoiceapp &amp;&amp;</code> and use the full PHP path. Let it run once, then <strong>delete the cron job</strong> so the password doesn't stay in the cron list.</p>
+<p>The Superadmin login is at <code>https://your-domain/superadmin/login</code>.</p>
 <ol class="steps">
-  <li>Sign in at <code>/superadmin/login</code> with your new email and password.</li>
+  <li>Sign in with the Superadmin email and password you entered in the <a href="#cp-installer">web installer</a>. If you installed from the command line, sign in with the default <code>admin@invoiceapp.com</code> / <code>password</code> and do the next step before anything else.</li>
+  <li>Click your avatar (top right) and choose <strong>Your account</strong>. There you can change your name and email (a new email needs your current password) and your password (needs the current password; at least 8 characters with upper and lowercase letters and a number). Changing the password signs out your other devices.</li>
   <li>Work through <a href="#sa-settings">System settings</a> in this order: General, then Email, then Stripe, then Payouts.</li>
 </ol>
+<h3 id="sa-login-recovery">Recovery: reset the login from the command line <a class="anchor" href="#sa-login-recovery">#</a></h3>
+<p>If you are locked out (forgotten password, or an email address you can no longer use), set a new email and password with tinker. Use cPanel <strong>Advanced &rarr; Terminal</strong> or SSH, and replace <code>CURRENT-EMAIL</code> with the Superadmin's current email:</p>
+<pre><code>cd ~/invoiceapp
+php artisan tinker --execute="echo App\Models\Superadmin::where('email','CURRENT-EMAIL')-&gt;update(['email'=&gt;'you@your-domain.com','password'=&gt;bcrypt('YOUR-LONG-UNIQUE-PASSWORD')]);"</code></pre>
+<p>It prints <code>1</code> when one account was updated. If you don't know the current email, list the accounts with <code>php artisan tinker --execute="echo App\Models\Superadmin::pluck('email');"</code>. Without Terminal or SSH, add the command as a one-off cPanel cron job: prefix it with <code>cd /home/myuser/invoiceapp &amp;&amp;</code> and use the full PHP path. Let it run once, then <strong>delete the cron job</strong> so the password doesn't stay in the cron list.</p>
 <p>The Superadmin sidebar has four groups: <strong>Overview</strong> (Dashboard), <strong>Business</strong> (Tenants, Plans, Payouts, Reports), <strong>Content</strong> (Pages, Blog posts, Menus, Landing page) and <strong>System</strong> (General, Stripe, Email, Payout settings, Updates, Queues).</p>
 
 <h2 id="sa-settings">Superadmin: system settings <a class="anchor" href="#sa-settings">#</a></h2>
@@ -722,7 +730,7 @@ php artisan up</code></pre></li>
 
 <h2 id="security">Security checklist <a class="anchor" href="#security">#</a></h2>
 <ul>
-  <li>☐ The default Superadmin email and password have been changed.</li>
+  <li>☐ The Superadmin signs in with its own email and a strong, unique password, set in the web installer or under <strong>Your account</strong>. Command-line installs: the default <code>admin@invoiceapp.com</code> / <code>password</code> login no longer works.</li>
   <li>☐ <code>APP_ENV=production</code> and <code>APP_DEBUG=false</code>.</li>
   <li>☐ The document root is <code>public/</code>; <code>https://your-domain/.env</code> returns 403/404.</li>
   <li>☐ HTTPS is enforced, and <code>SESSION_SECURE_COOKIE=true</code>.</li>

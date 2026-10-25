@@ -214,6 +214,7 @@ Route::middleware(['auth', 'tenant', 'verified', \App\Http\Middleware\CheckOnboa
 });
 
 // Superadmin Routes
+use App\Http\Controllers\Superadmin\AccountController as SuperadminAccountController;
 use App\Http\Controllers\Superadmin\AuthController as SuperadminAuthController;
 use App\Http\Controllers\Superadmin\DashboardController as SuperadminDashboardController;
 use App\Http\Controllers\Superadmin\PageController as SuperadminPageController;
@@ -230,6 +231,11 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
     Route::middleware(\App\Http\Middleware\SuperadminAuthenticate::class)->group(function () {
         Route::post('/logout', [SuperadminAuthController::class, 'logout'])->name('logout');
         Route::get('/dashboard', [SuperadminDashboardController::class, 'index'])->name('dashboard');
+
+        // Own login (name, email, password)
+        Route::get('/account', [SuperadminAccountController::class, 'edit'])->name('account');
+        Route::put('/account', [SuperadminAccountController::class, 'update'])->middleware('throttle:6,1')->name('account.update');
+        Route::put('/account/password', [SuperadminAccountController::class, 'updatePassword'])->middleware('throttle:6,1')->name('account.password');
         Route::resource('pages', SuperadminPageController::class)->except(['show']);
         Route::resource('posts', SuperadminPostController::class)->except(['show']);
         Route::resource('plans', SuperadminPlanController::class)->except(['show']);

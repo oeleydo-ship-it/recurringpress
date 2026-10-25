@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Log;
 use App\Models\User;
 use App\Models\Company;
 use App\Models\SubscriptionPlan;
+use App\Models\Superadmin;
+use Illuminate\Support\Str;
 use Symfony\Component\Process\Process;
 
 class AutoInstallerService
@@ -329,6 +331,13 @@ class AutoInstallerService
             ]);
             $steps[] = ['step' => 'Run migrations', 'status' => 'success'];
 
+            // Create the superadmin from the installer form before seeding, so SuperadminSeeder
+            // finds an account and never creates the default admin@invoiceapp.com / password login.
+            if (!empty($adminData['superadmin_email']) && !empty($adminData['superadmin_password_hash'])) {
+                $this->createSuperadmin($adminData);
+                $steps[] = ['step' => 'Create superadmin', 'status' => 'success'];
+            }
+
             // Run seeders
             $seeders = $this->manifest['database']['seeders'] ?? ['DatabaseSeeder'];
             foreach ($seeders as $seeder) {
@@ -428,6 +437,26 @@ class AutoInstallerService
             'is_active' => true,
             'email_verified_at' => now(),
         ]);
+    }
+
+    /**
+     * Create (or take over) the platform superadmin with the installer-supplied login.
+     */
+    protected function createSuperadmin(array $data): Superadmin
+    {
+        $admin = Superadmin::query()->oldest('id')->first() ?? new Superadmin();
+
+        // forceFill: the password is already hashed, and the "hashed" cast keeps a valid hash as is.
+        $admin->forceFill([
+            'name' => $data['name'] ?? 'Super Admin',
+            'email' => $data['superadmin_email'],
+            'password' => $data['superadmin_password_hash'],
+            'is_active' => true,
+            'email_verified_at' => now(),
+            'remember_token' => Str::random(60),
+        ])->save();
+
+        return $admin;
     }
 
     /**

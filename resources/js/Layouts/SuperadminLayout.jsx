@@ -18,6 +18,7 @@ import {
     Package,
     Settings2,
     Shield,
+    UserCog,
     Users,
     Wallet,
     X,
@@ -111,7 +112,11 @@ export default function SuperadminLayout({ children }) {
                                 <Avatar src={superadmin?.avatar_url} name={superadmin?.name} size="sm" />
                             </button>
                         }
-                        items={[{ label: 'Sign out', icon: LogOut, href: route('superadmin.logout'), method: 'post', danger: true }]}
+                        items={[
+                            { label: 'Your account', icon: UserCog, href: route('superadmin.account') },
+                            { separator: true },
+                            { label: 'Sign out', icon: LogOut, href: route('superadmin.logout'), method: 'post', danger: true },
+                        ]}
                     />
                 </div>
                 <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
