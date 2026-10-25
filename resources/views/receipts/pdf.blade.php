@@ -77,8 +77,8 @@
 
         <!-- Company Info -->
         <div class="company-info">
-            @if($receipt->company->logo)
-            <img src="{{ public_path('storage/' . $receipt->company->logo) }}" alt="{{ $receipt->company->name }}" style="max-height: 50px; margin-bottom: 8px;">
+            @if($receipt->company->logo_data_uri)
+            <img src="{{ $receipt->company->logo_data_uri }}" alt="{{ $receipt->company->name }}" style="max-height: 50px; margin-bottom: 8px;">
             @endif
             <div class="company-name">{{ $receipt->company->name }}</div>
             <div class="company-details">

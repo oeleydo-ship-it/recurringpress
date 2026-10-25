@@ -228,8 +228,8 @@
 
     <div class="container">
         <div class="header">
-            @if($invoice->company->logo)
-                <img src="{{ public_path('storage/' . $invoice->company->logo) }}" class="logo">
+            @if($invoice->company->logo_data_uri)
+                <img src="{{ $invoice->company->logo_data_uri }}" class="logo">
             @else
                 <div class="company-name">{{ $invoice->company->name }}</div>
             @endif

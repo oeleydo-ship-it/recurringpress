@@ -44,8 +44,8 @@
             <table>
                 <tr>
                     <td style="width: 60%;">
-                        @if($quotation->company->logo)
-                        <img src="{{ public_path('storage/' . $quotation->company->logo) }}" class="logo" alt="">
+                        @if($quotation->company->logo_data_uri)
+                        <img src="{{ $quotation->company->logo_data_uri }}" class="logo" alt="">
                         @else
                         <div class="company-name" style="font-size: 20px;">{{ $quotation->company->name }}</div>
                         @endif

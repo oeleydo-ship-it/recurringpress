@@ -240,8 +240,8 @@
         <table>
             <tr>
                 <td style="width: 60%;">
-                    @if($invoice->company->logo)
-                        <img src="{{ public_path('storage/' . $invoice->company->logo) }}" class="logo" alt="">
+                    @if($invoice->company->logo_data_uri)
+                        <img src="{{ $invoice->company->logo_data_uri }}" class="logo" alt="">
                     @else
                         <div style="font-size: 24px; font-weight: 700;">{{ $invoice->company->name }}</div>
                     @endif

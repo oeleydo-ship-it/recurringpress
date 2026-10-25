@@ -258,8 +258,8 @@
     <div class="container">
         <div class="header">
             <div class="header-content">
-                @if($invoice->company->logo)
-                    <img src="{{ public_path('storage/' . $invoice->company->logo) }}" class="logo" alt="">
+                @if($invoice->company->logo_data_uri)
+                    <img src="{{ $invoice->company->logo_data_uri }}" class="logo" alt="">
                 @else
                     <div style="font-size: 20px; font-weight: 700; margin-bottom: 20px;">{{ $invoice->company->name }}</div>
                 @endif

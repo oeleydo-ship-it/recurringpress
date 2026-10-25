@@ -46,8 +46,8 @@
     <div class="container">
         <div class="header">
             <div class="header-content">
-                @if($quotation->company->logo)
-                <img src="{{ public_path('storage/' . $quotation->company->logo) }}" class="logo" alt="">
+                @if($quotation->company->logo_data_uri)
+                <img src="{{ $quotation->company->logo_data_uri }}" class="logo" alt="">
                 @else
                 <div style="font-size: 20px; font-weight: 700; margin-bottom: 20px;">{{ $quotation->company->name }}</div>
                 @endif

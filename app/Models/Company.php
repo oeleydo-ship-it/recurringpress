@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class Company extends Model
 {
@@ -237,6 +238,47 @@ class Company extends Model
     public function getLogoUrlAttribute(): ?string
     {
         return $this->logo ? asset('storage/' . $this->logo) : null;
+    }
+
+    /**
+     * Logo as a base64 data URI for PDF rendering (dompdf), read straight from
+     * the public disk so it doesn't depend on the public/storage symlink.
+     * Returns null when no logo is set or the file is missing.
+     */
+    public function getLogoDataUriAttribute(): ?string
+    {
+        return self::storedImageDataUri($this->logo);
+    }
+
+    public function getSignatureDataUriAttribute(): ?string
+    {
+        return self::storedImageDataUri($this->authorized_signature);
+    }
+
+    private static function storedImageDataUri(?string $path): ?string
+    {
+        if (! $path) {
+            return null;
+        }
+
+        $disk = Storage::disk('public');
+
+        try {
+            if (! $disk->exists($path)) {
+                return null;
+            }
+
+            $contents = $disk->get($path);
+            $mime = $disk->mimeType($path) ?: 'image/png';
+        } catch (\Throwable $e) {
+            return null;
+        }
+
+        if (! $contents || ! str_starts_with($mime, 'image/')) {
+            return null;
+        }
+
+        return 'data:' . $mime . ';base64,' . base64_encode($contents);
     }
 
     public function getSignatureUrlAttribute(): ?string
