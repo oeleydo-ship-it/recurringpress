@@ -147,6 +147,7 @@ details[open] summary { margin-bottom: 8px; }
     <li><a href="#directadmin">DirectAdmin</a></li>
     <li><a href="#other-panels">aaPanel, CyberPanel, CloudPanel, HestiaCP</a></li>
     <li><a href="#vps">VPS / command line</a></li>
+    <li><a href="#git-deploy">Git / auto deployment</a></li>
     <li><a href="#env">Environment (.env) reference</a></li>
     <li><a href="#redis">Redis, queues &amp; Horizon</a></li>
     <li><a href="#ssr">Server-side rendering (SSR)</a></li>
@@ -244,7 +245,7 @@ details[open] summary { margin-bottom: 8px; }
   <li><code>vendor/</code>: the PHP dependencies (from <code>composer install --no-dev --optimize-autoloader</code>).</li>
   <li><code>public/build/</code>: the compiled React front-end (from <code>npm ci &amp;&amp; npm run build</code>). Without it every page is blank.</li>
   <li><code>bootstrap/ssr/</code>: the SSR bundle (only used if you run SSR).</li>
-  <li><code>install.json</code> in the project root. Its presence enables the web installer.</li>
+  <li><code>install.json</code> in the project root. Its presence enables the web installer. Only the control-panel package has it; Git deployments don't, so they never see the installer (see <a href="#git-deploy">Git / auto deployment</a>).</li>
   <li><code>.env.example</code>. The installer copies it to <code>.env</code>.</li>
 </ul>
 <p>The package must <strong>not</strong> contain a <code>.env</code> file, <code>storage/installed</code>, <code>node_modules/</code>, logs, or anything in <code>storage/app/public</code> from your test machine.</p>
@@ -440,10 +441,26 @@ php artisan key:generate
 php artisan migrate --seed --force
 php artisan storage:link
 php artisan optimize
-echo '{"installed_at":"'$(date -Iseconds)'"}' &gt; storage/installed   # disables the installer</code></pre>
+echo '{"installed_at":"'$(date -Iseconds)'"}' &gt; storage/installed   # disables the installer (or just delete install.json)</code></pre>
 <p>Add the scheduler to the web user's crontab (<code>sudo crontab -u www-data -e</code>):</p>
 <pre><code>* * * * * php /var/www/invoiceapp/artisan schedule:run &gt;&gt; /dev/null 2&gt;&amp;1</code></pre>
 <p>Finish with HTTPS (<code>sudo certbot --nginx</code>), <a href="#redis">Horizon</a> and optionally <a href="#ssr">SSR</a>.</p>
+
+<!-- ============================================================ -->
+<h2 id="git-deploy">Git / auto deployment <a class="anchor" href="#git-deploy">#</a></h2>
+<p>When a hosting platform deploys straight from the GitHub repository (push-to-deploy, Laravel Forge, Ploi, Laravel Cloud and similar), the web installer is <strong>not used</strong>. The repository has no <code>install.json</code> (only <code>install.json.installed</code>), and without it the app never redirects to <code>/install</code> and the installer URLs return 404, even though <code>storage/installed</code> doesn't exist. Set the environment variables in the platform's dashboard instead, and let the deploy script set up the app.</p>
+<ol class="steps">
+  <li>Set the environment: at least <code>APP_KEY</code> (from <code>php artisan key:generate --show</code>), <code>APP_URL</code>, <code>APP_ENV=production</code>, <code>APP_DEBUG=false</code> and the <code>DB_*</code> values. See the <a href="#env">.env reference</a> for the rest.</li>
+  <li>Use a deploy script like this one:
+<pre><code>composer install --no-dev --optimize-autoloader
+npm ci &amp;&amp; npm run build
+php artisan migrate --force
+php artisan db:seed --force      # safe to repeat; it never resets an existing Superadmin
+php artisan storage:link
+php artisan optimize</code></pre></li>
+  <li>The first <code>db:seed</code> creates the default Superadmin <code>admin@invoiceapp.com</code> / <code>password</code> and prints a warning in the deploy log. Sign in at <code>/superadmin/login</code> straight after the first deploy and change both under <strong>Your account</strong> (see <a href="#sa-login">First login</a>).</li>
+</ol>
+<p>To switch the installer off completely, whatever files are present, set <code>AUTOINSTALLER_ENABLED=false</code>.</p>
 
 <!-- ============================================================ -->
 <h2 id="env">Environment (<code>.env</code>) reference <a class="anchor" href="#env">#</a></h2>
@@ -714,8 +731,8 @@ php artisan up</code></pre></li>
   <thead><tr><th>Symptom</th><th>Cause and fix</th></tr></thead>
   <tbody>
     <tr><td>Blank white page, or a "500 Server Error"</td><td>Usually the PHP version. Make sure the domain uses PHP 8.3/8.4 (MultiPHP Manager). Then check <code>storage/logs/laravel.log</code>.</td></tr>
-    <tr><td>"Installation Not Available"</td><td><code>install.json</code> is missing from the project root. Upload it, or rename <code>install.json.installed</code> to <code>install.json</code>.</td></tr>
-    <tr><td>Redirected to <code>/install</code> after installing</td><td><code>storage/installed</code> is missing, or <code>storage</code> isn't writable. Fix the permissions (775).</td></tr>
+    <tr><td><code>/install</code> shows a 404 page on a new control-panel install</td><td><code>install.json</code> is missing from the project root. Upload it, or rename <code>install.json.installed</code> to <code>install.json</code>. (On a <a href="#git-deploy">Git deployment</a> the 404 is expected.)</td></tr>
+    <tr><td>Redirected to <code>/install</code> after installing</td><td><code>storage/installed</code> is missing, or <code>storage</code> isn't writable, and <code>install.json</code> is still in the root. Fix the permissions (775), or delete <code>install.json</code>.</td></tr>
     <tr><td>Page loads but is unstyled or empty</td><td><code>public/build</code> is missing. Upload it or run <code>npm run build</code>. Also make sure a stray <code>public/hot</code> file isn't present.</td></tr>
     <tr><td>404 on every page except the home page</td><td>URL rewriting is off. Enable <code>mod_rewrite</code> or <code>.htaccess</code> (Apache), or add the <code>try_files</code> rule (Nginx).</td></tr>
     <tr><td>Logos or uploaded images don't show</td><td>The storage link is missing. Run <code>php artisan storage:link</code>, or ask your host to allow symlinks.</td></tr>
@@ -736,7 +753,7 @@ php artisan up</code></pre></li>
   <li>☐ HTTPS is enforced, and <code>SESSION_SECURE_COOKIE=true</code>.</li>
   <li>☐ Stripe webhook secrets are set; live keys are used only after testing in test mode.</li>
   <li>☐ Daily backups of the database and <code>storage/app</code> are in place.</li>
-  <li>☐ <code>install.json</code> is no longer in the root, or <code>storage/installed</code> exists. Both disable the installer.</li>
+  <li>☐ <code>/install</code> returns 404 or redirects to the login page. The installer is open only while <code>install.json</code> is in the root and <code>storage/installed</code> doesn't exist.</li>
   <li>☐ PHP and the server are kept up to date.</li>
 </ul>
 

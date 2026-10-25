@@ -20,7 +20,20 @@ class AutoInstallerService
     protected string $manifestPath = '';
 
     /**
-     * Check if there's a pending installation
+     * Whether storage/installed exists (written when the web installer finishes).
+     */
+    public function isMarkedInstalled(): bool
+    {
+        return File::exists(storage_path(config('autoinstaller.installed_marker', 'installed')));
+    }
+
+    /**
+     * Check if there's a pending installation.
+     *
+     * The web installer is only for manual control-panel setups (cPanel, CloudPanel, Plesk...),
+     * whose release zip ships install.json. Git / auto deployments have no install.json (the repo
+     * only holds install.json.installed) and are set up by their deploy script, so they never see
+     * the installer and its routes stay closed, even without storage/installed.
      */
     public function hasPendingInstallation(): bool
     {
@@ -28,8 +41,7 @@ class AutoInstallerService
             return false;
         }
 
-        // Check if already installed
-        if (File::exists(storage_path(config('autoinstaller.installed_marker', 'installed')))) {
+        if ($this->isMarkedInstalled()) {
             return false;
         }
 
