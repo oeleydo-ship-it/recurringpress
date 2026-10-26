@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Requests on a tenant's custom domain may only reach that tenant's public invoice and
+ * Requests on a tenant's custom domain or platform subdomain may only reach that tenant's public invoice and
  * quotation pages; everything else is sent to the platform. Unknown hosts get a bare 404
  * (no session, no branding, nothing about any tenant).
  *
@@ -20,8 +20,8 @@ class ResolveCustomDomain
     {
         $host = $request->getHost();
 
-        // With custom domains switched off, host handling is unchanged.
-        if (! TenantDomain::enabled() || TenantDomain::isPlatformHost($host)) {
+        // With custom domains and subdomains both switched off, host handling is unchanged.
+        if (! TenantDomain::anyEnabled() || TenantDomain::isPlatformHost($host)) {
             return $next($request);
         }
 

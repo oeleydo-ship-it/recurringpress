@@ -90,6 +90,7 @@ class CompanySetting extends Model
         'show_invoice_footer' => 'boolean',
         'show_quotation_website' => 'boolean',
         'show_quotation_message' => 'boolean',
+        'cf_dns_records' => 'array',
         'custom_domain_verified_at' => 'datetime',
         'custom_domain_checked_at' => 'datetime',
         'smtp_enabled' => 'boolean',
@@ -102,7 +103,12 @@ class CompanySetting extends Model
     /** A custom domain is only used for links once its DNS has been verified. */
     public function hasVerifiedCustomDomain(): bool
     {
-        return config('tenancy.custom_domains.enabled') && filled($this->custom_domain) && $this->custom_domain_verified_at !== null;
+        return \App\Support\TenantDomain::enabled() && filled($this->custom_domain) && $this->custom_domain_verified_at !== null;
+    }
+
+    public function hasActiveSubdomain(): bool
+    {
+        return \App\Support\TenantDomain::subdomainsEnabled() && filled($this->subdomain);
     }
 
     /** Client emails go through the tenant's SMTP only when it is switched on and a test send succeeded. */

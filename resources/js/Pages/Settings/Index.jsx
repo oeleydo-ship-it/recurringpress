@@ -27,7 +27,17 @@ export default function SettingsIndex({ company, settings, options, webhookUrl, 
                     { key: 'quotations', label: 'Quotations', icon: FileSignature, content: <QuotationTab company={company} settings={settings} /> },
                     { key: 'payments', label: 'Payments', icon: CreditCard, content: <PaymentsTab settings={settings} webhookUrl={webhookUrl} /> },
                     { key: 'appearance', label: 'Appearance', icon: Palette, content: <AppearanceTab settings={settings} options={options} /> },
-                    { key: 'domain', label: 'Custom domain', icon: Globe, content: <DomainTab domain={domain} /> },
+                    {
+                        key: 'domain',
+                        label: 'Domains',
+                        icon: Globe,
+                        content: (
+                            <div className="space-y-6">
+                                <SubdomainCard subdomain={domain.subdomain} />
+                                <DomainTab domain={domain} />
+                            </div>
+                        ),
+                    },
                     { key: 'email', label: 'Email (SMTP)', icon: Mail, content: <EmailTab smtp={smtp} /> },
                     { key: 'preferences', label: 'Preferences', icon: Settings2, content: <PreferencesTab settings={settings} options={options} /> },
                     { key: 'notes', label: 'Notes & terms', icon: NotebookPen, content: <NotesTab settings={settings} /> },
@@ -509,6 +519,61 @@ function NotesTab({ settings }) {
     );
 }
 
+/* -------------------------- Platform subdomain -------------------------- */
+
+function SubdomainCard({ subdomain }) {
+    const confirm = useConfirm();
+    const form = useForm({ subdomain: subdomain.slug ?? '' });
+
+    if (!subdomain.enabled) {
+        return null;
+    }
+
+    return (
+        <Section
+            title="Subdomain"
+            description={`A free address on ${subdomain.base} for your client-facing invoice and quotation pages. It works straight away, with no DNS setup.`}
+            form={form}
+            submitLabel={subdomain.slug ? 'Save subdomain' : 'Claim subdomain'}
+            onSubmit={() => form.put(route('settings.subdomain'), { preserveScroll: true })}
+        >
+            <FormField label="Subdomain" error={form.errors.subdomain} hint="3–32 lowercase letters, numbers or hyphens. Changing it breaks links already sent with the old name.">
+                <Input
+                    value={form.data.subdomain}
+                    onChange={(e) => form.setData('subdomain', e.target.value.toLowerCase())}
+                    invalid={Boolean(form.errors.subdomain)}
+                    placeholder="yourcompany"
+                    className="font-mono"
+                    maxLength={32}
+                    suffix={`.${subdomain.base}`}
+                />
+            </FormField>
+            {subdomain.url ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-slate-50 p-3 text-sm">
+                    <span className="flex items-center gap-2">
+                        <Badge tone={subdomain.in_use ? 'green' : 'gray'} dot>
+                            {subdomain.in_use ? 'Used in emails' : 'Active'}
+                        </Badge>
+                        <CopyValue value={subdomain.url} />
+                    </span>
+                    {!subdomain.in_use ? <span className="text-xs text-slate-500">Emails link to your verified custom domain instead.</span> : null}
+                    <button
+                        type="button"
+                        className="inline-flex items-center gap-1 text-xs font-medium text-red-600"
+                        onClick={async () => {
+                            if (await confirm({ title: 'Remove subdomain?', message: 'Links already sent with this subdomain will stop working.', confirmText: 'Remove' })) {
+                                router.delete(route('settings.subdomain.remove'), { preserveScroll: true, onSuccess: () => form.setData('subdomain', '') });
+                            }
+                        }}
+                    >
+                        <Trash2 className="size-3" /> Remove
+                    </button>
+                </div>
+            ) : null}
+        </Section>
+    );
+}
+
 /* --------------------------- Custom domain --------------------------- */
 
 function CopyValue({ value }) {
@@ -569,13 +634,14 @@ function DomainTab({ domain }) {
     }
 
     const isSub = domain.domain.split('.').length > 2;
+    const stage = domain.verified ? null : domain.hostname_status === 'active' ? 'Issuing certificate' : 'Waiting for DNS';
 
     return (
         <Card>
             <CardHeader
                 title="Custom domain"
                 description="Client-facing invoice and quotation pages, and the links in your emails, use this domain once it is verified."
-                actions={domain.verified ? <Badge tone="green" dot>Verified</Badge> : <Badge tone="yellow" dot>Pending verification</Badge>}
+                actions={domain.verified ? <Badge tone="green" dot>Verified</Badge> : <Badge tone="yellow" dot>{stage}</Badge>}
             />
             <CardBody className="space-y-5">
                 <div className="flex flex-wrap items-center gap-3">
@@ -608,46 +674,26 @@ function DomainTab({ domain }) {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 align-top">
-                                <tr>
-                                    <td className="px-3 py-2.5 font-mono text-xs font-semibold">TXT</td>
-                                    <td className="px-3 py-2.5">
-                                        <CopyValue value={domain.txt_name} />
-                                    </td>
-                                    <td className="px-3 py-2.5">
-                                        <CopyValue value={domain.txt_value} />
-                                    </td>
-                                </tr>
-                                {isSub ? (
-                                    <tr>
-                                        <td className="px-3 py-2.5 font-mono text-xs font-semibold">CNAME</td>
+                                {domain.records.map((r) => (
+                                    <tr key={`${r.type}-${r.name}-${r.value}`}>
                                         <td className="px-3 py-2.5">
-                                            <CopyValue value={domain.domain} />
+                                            <span className="font-mono text-xs font-semibold">{r.type}</span>
+                                            <span className="mt-0.5 block text-[11px] text-slate-500">{r.purpose}</span>
                                         </td>
                                         <td className="px-3 py-2.5">
-                                            <CopyValue value={domain.cname_target} />
+                                            <CopyValue value={r.name} />
+                                        </td>
+                                        <td className="px-3 py-2.5">
+                                            <CopyValue value={r.value} />
                                         </td>
                                     </tr>
-                                ) : (
-                                    (domain.target_ips.length ? domain.target_ips : ['(server IP)']).map((ip) => (
-                                        <tr key={ip}>
-                                            <td className="px-3 py-2.5 font-mono text-xs font-semibold">A</td>
-                                            <td className="px-3 py-2.5">
-                                                <CopyValue value={domain.domain} />
-                                            </td>
-                                            <td className="px-3 py-2.5">
-                                                <CopyValue value={ip} />
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
+                                ))}
                             </tbody>
                         </table>
                     </div>
                     <p className="mt-2 text-xs text-slate-500">
-                        {isSub
-                            ? `Point the subdomain at ${domain.cname_target} with a CNAME record.`
-                            : `A root domain can’t use a CNAME, so add A records instead. A subdomain such as billing.${domain.domain} is easier.`}{' '}
-                        The TXT record proves the domain is yours. Keep both records in place: the domain is re-checked automatically. DNS changes can take up to an hour.
+                        {isSub ? null : `Root domains need a DNS provider that supports CNAME flattening or ALIAS records; a subdomain such as billing.${domain.domain} is easier. `}
+                        The TXT records let Cloudflare confirm the domain is yours and issue its SSL certificate. If a certificate record is missing, click “Check status” again in a minute. Keep the records in place: the domain is re-checked automatically. DNS changes can take up to an hour.
                     </p>
                 </div>
 
@@ -675,7 +721,7 @@ function DomainTab({ domain }) {
                     loading={verifying}
                     onClick={() => router.post(route('settings.domain.verify'), {}, { preserveScroll: true, onStart: () => setVerifying(true), onFinish: () => setVerifying(false) })}
                 >
-                    {domain.verified ? 'Check again' : 'Verify DNS'}
+                    Check status
                 </Button>
             </CardFooter>
         </Card>

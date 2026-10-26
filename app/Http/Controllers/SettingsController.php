@@ -7,7 +7,7 @@ use App\Models\Company;
 use App\Models\CompanySetting;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
-use App\Services\DnsLookup;
+use App\Services\CloudflareCustomHostnames;
 use App\Services\TenantMailer;
 use App\Support\TenantDomain;
 use Illuminate\Http\Request;
@@ -73,16 +73,23 @@ class SettingsController extends Controller
         $domain = $settings->custom_domain;
 
         return [
+            'subdomain' => [
+                'enabled' => TenantDomain::subdomainsEnabled(),
+                'slug' => $settings->subdomain,
+                'base' => TenantDomain::subdomainBase(),
+                'url' => $settings->hasActiveSubdomain() ? TenantDomain::subdomainUrl($settings->subdomain) : null,
+                'in_use' => $settings->hasActiveSubdomain() && ! $settings->hasVerifiedCustomDomain(),
+            ],
             'enabled' => TenantDomain::enabled(),
             'domain' => $domain,
             'verified' => $settings->hasVerifiedCustomDomain(),
             'verified_at' => $settings->custom_domain_verified_at?->toIso8601String(),
             'checked_at' => $settings->custom_domain_checked_at?->toIso8601String(),
             'error' => $settings->custom_domain_error,
-            'txt_name' => $domain ? TenantDomain::txtName($domain) : null,
-            'txt_value' => $settings->custom_domain_token ? TenantDomain::txtValue($settings->custom_domain_token) : null,
-            'cname_target' => TenantDomain::cnameTarget(),
-            'target_ips' => TenantDomain::targetIps(app(DnsLookup::class)),
+            'hostname_status' => $settings->cf_hostname_status,
+            'ssl_status' => $settings->cf_ssl_status,
+            'records' => $settings->cf_dns_records ?? [],
+            'cname_target' => CloudflareCustomHostnames::cnameTarget(),
         ];
     }
 
@@ -113,15 +120,15 @@ class SettingsController extends Controller
             throw ValidationException::withMessages(['custom_domain' => 'This domain is already connected to another account.']);
         }
 
-        $settings->forceFill([
-            'custom_domain' => $domain,
-            'custom_domain_token' => TenantDomain::newToken(),
-            'custom_domain_verified_at' => null,
-            'custom_domain_checked_at' => null,
-            'custom_domain_error' => null,
-        ])->save();
+        try {
+            TenantDomain::connect($settings, $domain);
+        } catch (\Throwable $e) {
+            Log::warning('Connecting custom domain failed', ['company_id' => $settings->company_id, 'domain' => $domain, 'error' => $e->getMessage()]);
 
-        return back()->with('success', 'Domain saved. Add the DNS records below, then click Verify.');
+            throw ValidationException::withMessages(['custom_domain' => 'Could not register the domain: ' . $e->getMessage()]);
+        }
+
+        return back()->with('success', 'Domain saved. Add the DNS records below, then click “Check status”.');
     }
 
     public function verifyDomain()
@@ -134,7 +141,7 @@ class SettingsController extends Controller
             return back()->with('error', 'Add a domain first.');
         }
 
-        // A manual check always reflects the current DNS (no grace period).
+        // A manual check always reflects the current status (no grace period).
         return TenantDomain::verify($settings, grace: false)
             ? back()->with('success', $settings->custom_domain . ' is verified. New emails will link to it.')
             : back()->with('error', 'Not verified yet: ' . $settings->custom_domain_error . ' DNS changes can take up to an hour to show up.');
@@ -142,15 +149,46 @@ class SettingsController extends Controller
 
     public function removeDomain()
     {
-        $this->settings()->forceFill([
-            'custom_domain' => null,
-            'custom_domain_token' => null,
-            'custom_domain_verified_at' => null,
-            'custom_domain_checked_at' => null,
-            'custom_domain_error' => null,
-        ])->save();
+        TenantDomain::disconnect($this->settings());
 
         return back()->with('success', 'Custom domain removed. Links use the platform address again.');
+    }
+
+    /* --------------------------- Platform subdomain --------------------------- */
+
+    public function updateSubdomain(Request $request)
+    {
+        abort_unless(TenantDomain::subdomainsEnabled(), 404);
+
+        $request->validate(['subdomain' => 'required|string|max:63']);
+
+        $slug = strtolower(trim((string) $request->input('subdomain')));
+
+        if ($reason = TenantDomain::slugRejection($slug)) {
+            throw ValidationException::withMessages(['subdomain' => $reason]);
+        }
+
+        $settings = $this->settings();
+
+        if ($settings->subdomain === $slug) {
+            return back();
+        }
+
+        if (CompanySetting::where('subdomain', $slug)->whereKeyNot($settings->id)->exists()) {
+            throw ValidationException::withMessages(['subdomain' => 'This subdomain is already taken.']);
+        }
+
+        $settings->forceFill(['subdomain' => $slug])->save();
+
+        return back()->with('success', TenantDomain::subdomainHost($slug) . ' is ready.'
+            . ($settings->hasVerifiedCustomDomain() ? ' Emails keep linking to your verified custom domain.' : ' New emails will link to it.'));
+    }
+
+    public function removeSubdomain()
+    {
+        $this->settings()->forceFill(['subdomain' => null])->save();
+
+        return back()->with('success', 'Subdomain removed.');
     }
 
     /* ------------------------------ Email (SMTP) ------------------------------ */

@@ -31,7 +31,7 @@ Artisan::command('quotations:check-expired', function () {
 
 Artisan::command('domains:recheck', function () {
     if (! TenantDomain::enabled()) {
-        $this->info('Custom domains are disabled (CUSTOM_DOMAINS_ENABLED).');
+        $this->info('Custom domains are switched off or Cloudflare is not configured (Superadmin → Custom domains).');
 
         return;
     }
@@ -39,7 +39,7 @@ Artisan::command('domains:recheck', function () {
     $checked = 0;
     $failed = 0;
 
-    CompanySetting::whereNotNull('custom_domain')->whereNotNull('custom_domain_token')->each(function (CompanySetting $settings) use (&$checked, &$failed) {
+    CompanySetting::whereNotNull('custom_domain')->each(function (CompanySetting $settings) use (&$checked, &$failed) {
         $checked++;
         if (! TenantDomain::verify($settings)) {
             $failed++;
@@ -47,7 +47,7 @@ Artisan::command('domains:recheck', function () {
     });
 
     $this->info("Checked {$checked} custom domains, {$failed} failing.");
-})->purpose('Re-check DNS for tenant custom domains (verifies pending ones, un-verifies broken ones)');
+})->purpose('Refresh tenant custom domain status from Cloudflare (verifies pending ones, un-verifies broken ones)');
 
 // Laravel 11 only reads the schedule from this file; app/Console/Kernel.php is no longer loaded.
 Schedule::command('invoices:check-overdue')->daily();

@@ -156,67 +156,72 @@ php artisan up
 * Serve over HTTPS and set `SESSION_SECURE_COOKIE=true`.
 * Extra disposable-email domains can be blocked with `DISPOSABLE_EMAIL_DOMAINS=foo.com,bar.net`.
 
-### 8. Tenant custom domains
+### 8. Tenant domains: subdomains and custom domains (Cloudflare)
 
-Tenants can connect their own domain (Settings → Custom domain), e.g. `billing.theirdomain.com`. Once its DNS
-is verified, their public invoice/quotation pages work on that domain and new emails link to it. Old links on
-the platform address keep working.
+Tenants can give their client-facing invoice and quotation pages their own address (Settings → Domains):
 
-**How it works**
+* **Subdomain:** `acme.recurringpress.com`. It works as soon as it is claimed. Names are 3–32 characters,
+  unique, and checked against a reserved list (`www`, `app`, `admin`, `api`, `mail`, `superadmin`, … in `config/tenancy.php`).
+* **Custom domain:** `billing.theirdomain.com`, registered as a **Cloudflare for SaaS custom hostname**.
+  Cloudflare verifies ownership, issues the certificate and proxies the traffic to this server.
 
-* The tenant adds two DNS records: a TXT record `_recurringpress.<domain>` = `recurringpress-verify=<token>`
-  (proves ownership) and a CNAME `<domain>` → the `APP_URL` host (or A records to the server IP for a root domain).
-* "Verify DNS" checks both. `domains:recheck` runs hourly: it verifies pending domains, and un-verifies a domain
-  after two failed checks in a row.
-* On a custom domain, only `/invoice/*` and `/quotation/*` are served, and only for that tenant's documents
-  (another tenant's token returns 404). Other GET paths redirect to `APP_URL`. When the feature is on, any host
-  that is neither a platform host nor a verified tenant domain gets a bare `404 Not Found`. Platform hosts are
-  the `APP_URL` host and its `www.` variant, `localhost`, and IP addresses; add any others with
-  `PLATFORM_HOSTS=a.com,b.com`.
+**Which link emails use:** a verified custom domain first, then the subdomain, then `APP_URL`. Old links keep
+working on the platform address.
 
-**The feature is off by default** (`CUSTOM_DOMAINS_ENABLED=false`) because it needs server work first. Links are
-built as `https://<tenant-domain>/…`, so the server must be able to present a TLS certificate for every tenant
-domain. A single certificate for recurringpress.com won't cover them, and plain nginx can't issue certificates
-on demand. The production server currently answers as `nginx/1.24.0 (Ubuntu)` with no CDN in front, so pick one of:
+**What is served on a tenant host:** only `/invoice/*` and `/quotation/*`, and only that tenant's documents (another
+tenant's token returns 404). Other GET paths redirect to `APP_URL`. While either feature is on, any host that is
+neither a platform host nor a tenant host gets a bare `404 Not Found`. Platform hosts are the `APP_URL` host and its
+`www.` variant, `localhost` and IP addresses; add others with `PLATFORM_HOSTS=a.com,b.com`.
 
-1. **Caddy in front, on-demand TLS (recommended for a single VPS).** Caddy listens on 80/443 and gets a
-   Let's Encrypt certificate the first time a verified domain is visited. nginx moves to `127.0.0.1:8080`.
-   The app exposes the "ask" endpoint `GET /tls/allowed?domain=…`. It returns 200 only for platform hosts and
-   verified tenant domains, so nobody can make the server request certificates for arbitrary domains.
+Both features are **off by default** and are switched on in **Superadmin → Custom domains**, after the
+Cloudflare setup below.
 
-   ```caddy
-   {
-       on_demand_tls {
-           ask http://127.0.0.1:8080/tls/allowed
-       }
-   }
+#### Cloudflare setup (one-time)
 
-   recurringpress.com, www.recurringpress.com {
-       reverse_proxy 127.0.0.1:8080
-   }
+`recurringpress.com` currently uses GoDaddy nameservers (`ns07/ns08.domaincontrol.com`) and the server answers
+directly as `nginx/1.24.0 (Ubuntu)`, so none of the following exists yet:
 
-   https:// {
-       tls {
-           on_demand
-       }
-       reverse_proxy 127.0.0.1:8080
-   }
-   ```
+1. **Move the zone to Cloudflare.** Add `recurringpress.com` to Cloudflare and switch the nameservers at GoDaddy.
+   Cloudflare for SaaS needs the platform's own zone on Cloudflare. Re-create the existing DNS records (A record to
+   the server, MX, etc.) and set them to **Proxied**.
+2. **Fallback origin.** Add a proxied record such as `customers.recurringpress.com` → A `<server IP>`. Under
+   **SSL/TLS → Custom Hostnames**, enable Cloudflare for SaaS (the plan must include it) and set that record as the
+   fallback origin.
+3. **Wildcard for subdomains.** Add a proxied `*.recurringpress.com` → A `<server IP>`. Cloudflare's Universal SSL
+   covers one level of subdomains, so `acme.recurringpress.com` gets HTTPS with no work on the server.
+4. **API token.** Under My Profile → API Tokens, create a token with **Zone → SSL and Certificates → Edit** and
+   **Zone → Zone → Read**, limited to this zone.
+5. **Superadmin → Custom domains.** Enter the zone ID, the token (stored encrypted with `APP_KEY`) and the CNAME target
+   (`customers.recurringpress.com`), then click **Test connection**. It checks the token and that the fallback origin
+   matches. Then switch on tenant custom domains and/or subdomains.
 
-   Then make the nginx vhost the default server on `127.0.0.1:8080` (`listen 127.0.0.1:8080 default_server;`
-   `server_name _;`) so it accepts any Host. Laravel rejects unknown hosts itself. Trust the proxy so the app
-   sees `https` and the client IP (`TrustProxies` for `127.0.0.1`).
-2. **Cloudflare for SaaS (Custom Hostnames).** Cloudflare issues the certificates. Tenants CNAME to your
-   fallback origin hostname, so set `CUSTOM_DOMAIN_CNAME_TARGET` to it. nginx must still accept any Host.
-3. **certbot per domain.** Run `certbot --nginx -d <domain>` for each verified domain and add a `server_name`.
-   This works but is manual, so only use it for a handful of tenants.
+#### Origin server (nginx) changes
 
-When the chosen setup serves HTTPS for a test domain, set `CUSTOM_DOMAINS_ENABLED=true` and run
-`php artisan optimize`. Also check that `SESSION_DOMAIN` is empty or the platform domain: on custom domains the app
-switches to host-only session cookies automatically.
+* **Accept any Host.** Traffic for every tenant hostname arrives with its own Host header. Make the app's vhost the
+  default server (`listen 443 ssl default_server; server_name _;`, and the same for port 80). Laravel rejects
+  unknown hosts itself.
+* **TLS between Cloudflare and the server.** Use SSL mode **Full**. Install a Cloudflare Origin CA certificate (or
+  keep the current one) on nginx. **Full (strict)** validates the origin certificate against each tenant hostname
+  and will fail for custom domains unless the origin certificate covers them.
+* **Real client IPs.** Behind Cloudflare every request comes from Cloudflare's IPs, and login and rate limits are
+  per IP. Restore the visitor IP in nginx with `set_real_ip_from <each Cloudflare range>;` and
+  `real_ip_header CF-Connecting-IP;` (ranges: https://www.cloudflare.com/ips/). Or trust Cloudflare's ranges in
+  Laravel's `trustProxies`.
+* Leave `SESSION_DOMAIN` empty (host-only cookies). The app forces host-only cookies on tenant hosts anyway.
 
-Related env vars: `CUSTOM_DOMAIN_CNAME_TARGET` (default: `APP_URL` host), `CUSTOM_DOMAIN_IPS` (A-record IPs
-shown for root domains; default: whatever the CNAME target resolves to), `CUSTOM_DOMAIN_SCHEME` (default `https`).
+#### How a tenant connects a custom domain
+
+Saving the domain creates the custom hostname on Cloudflare (TXT validation). The tenant then sees three records:
+a CNAME to the fallback origin, an ownership TXT (`_cf-custom-hostname.…`) and a certificate TXT
+(`_acme-challenge.…`). **Check status** asks Cloudflare. The domain counts as verified once both the hostname and its
+certificate are `active`. `domains:recheck` runs hourly: it verifies pending domains and un-verifies a domain after
+two failed checks in a row. A Cloudflare API outage is recorded but never un-verifies a domain. Disconnecting deletes
+the hostname from Cloudflare. A root domain (`theirdomain.com`) needs a DNS provider that supports CNAME
+flattening or ALIAS records.
+
+Related env vars: `TENANT_SUBDOMAIN_BASE` (default: `APP_URL` host without `www.`),
+`CUSTOM_DOMAIN_SCHEME` / `TENANT_SUBDOMAIN_SCHEME` (default `https`), `CLOUDFLARE_API_BASE` (only for testing
+against a fake API).
 
 ### 9. Tenant SMTP
 

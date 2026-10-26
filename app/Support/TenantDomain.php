@@ -4,24 +4,28 @@ namespace App\Support;
 
 use App\Models\Company;
 use App\Models\CompanySetting;
-use App\Services\DnsLookup;
+use App\Models\SystemSetting;
+use App\Services\CloudflareCustomHostnames;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 
 /**
- * Tenant custom domains (e.g. billing.client-business.com) for client-facing invoice and
- * quotation links. A domain is only used once its DNS is verified: an ownership TXT record
- * plus a CNAME/A record pointing at the platform.
+ * Tenant hosts for client-facing invoice and quotation links:
+ *  - custom domains (e.g. billing.client-business.com), registered as Cloudflare for SaaS
+ *    custom hostnames and used once Cloudflare reports the hostname and certificate active;
+ *  - platform subdomains (e.g. acme.recurringpress.com), active as soon as they're claimed.
+ * Both are switched on in Superadmin → Custom domains.
  */
 class TenantDomain
 {
-    /** Request attribute holding the company id when a request arrived on a custom domain. */
+    /** Request attribute holding the company id when a request arrived on a tenant host. */
     public const ATTRIBUTE = 'custom_domain_company_id';
 
+    /** Tenant custom domains: switched on in Superadmin and Cloudflare fully configured. */
     public static function enabled(): bool
     {
-        return (bool) config('tenancy.custom_domains.enabled');
+        return filter_var(SystemSetting::get('custom_domains_enabled'), FILTER_VALIDATE_BOOL) && CloudflareCustomHostnames::configured();
     }
 
     /** Normalise user input ("https://Billing.Example.com/") to a bare hostname, or null if invalid. */
@@ -68,19 +72,76 @@ class TenantDomain
         return filter_var($host, FILTER_VALIDATE_IP) !== false || in_array($host, self::platformHosts(), true);
     }
 
-    /** The company whose verified custom domain is $host, if any. */
+    /** The company whose verified custom domain or platform subdomain is $host, if any. */
     public static function companyForHost(string $host): ?Company
     {
-        if (! self::enabled()) {
+        $host = strtolower($host);
+
+        if (self::enabled()) {
+            $settings = CompanySetting::query()
+                ->where('custom_domain', $host)
+                ->whereNotNull('custom_domain_verified_at')
+                ->first();
+
+            if ($settings) {
+                return $settings->company;
+            }
+        }
+
+        $slug = self::subdomainSlugFromHost($host);
+
+        return $slug ? CompanySetting::where('subdomain', $slug)->first()?->company : null;
+    }
+
+    /* ------------------------- Platform subdomains ------------------------- */
+
+    public static function subdomainsEnabled(): bool
+    {
+        return filter_var(SystemSetting::get('tenant_subdomains_enabled'), FILTER_VALIDATE_BOOL);
+    }
+
+    /** True when either custom domains or subdomains are on (host filtering is active). */
+    public static function anyEnabled(): bool
+    {
+        return self::enabled() || self::subdomainsEnabled();
+    }
+
+    public static function subdomainBase(): string
+    {
+        return strtolower((string) config('tenancy.subdomains.base'));
+    }
+
+    public static function subdomainHost(string $slug): string
+    {
+        return $slug . '.' . self::subdomainBase();
+    }
+
+    /** "acme" for "acme.<base>"; null for anything else (including deeper subdomains). */
+    public static function subdomainSlugFromHost(string $host): ?string
+    {
+        $suffix = '.' . self::subdomainBase();
+
+        if (! self::subdomainsEnabled() || ! str_ends_with($host, $suffix)) {
             return null;
         }
 
-        $settings = CompanySetting::query()
-            ->where('custom_domain', strtolower($host))
-            ->whereNotNull('custom_domain_verified_at')
-            ->first();
+        $slug = substr($host, 0, -strlen($suffix));
 
-        return $settings?->company;
+        return self::slugRejection($slug) === null ? $slug : null;
+    }
+
+    /** Why a slug can't be used (format or reserved), or null if it's acceptable. */
+    public static function slugRejection(string $slug): ?string
+    {
+        if (! preg_match('/^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])$/', $slug) || str_contains($slug, '--')) {
+            return 'Use 3–32 lowercase letters, numbers and single hyphens, starting and ending with a letter or number.';
+        }
+
+        if (in_array($slug, config('tenancy.subdomains.reserved', []), true)) {
+            return 'This name is reserved.';
+        }
+
+        return null;
     }
 
     /**
@@ -94,102 +155,147 @@ class TenantDomain
         return $companyId ? $query->where('company_id', $companyId) : $query;
     }
 
-    /** Absolute URL for a relative path, on the company's verified domain when it has one. */
+    /**
+     * Absolute URL for a relative path. Precedence: verified custom domain, then platform
+     * subdomain, then the platform address.
+     */
     public static function url(?Company $company, string $path): string
     {
         $settings = $company?->settings;
+        $path = '/' . ltrim($path, '/');
 
         if ($settings?->hasVerifiedCustomDomain()) {
-            return config('tenancy.custom_domains.scheme', 'https') . '://' . $settings->custom_domain . '/' . ltrim($path, '/');
+            return config('tenancy.custom_domains.scheme', 'https') . '://' . $settings->custom_domain . $path;
+        }
+
+        if ($settings?->hasActiveSubdomain()) {
+            return self::subdomainUrl($settings->subdomain, $path);
         }
 
         return url($path);
     }
 
-    /* ----------------------------- Verification ----------------------------- */
-
-    public static function newToken(): string
+    public static function subdomainUrl(string $slug, string $path = '/'): string
     {
-        return Str::lower(Str::random(32));
+        return config('tenancy.subdomains.scheme', 'https') . '://' . self::subdomainHost($slug) . self::portSuffix() . '/' . ltrim($path, '/');
     }
 
-    public static function txtName(string $domain): string
+    /** Keep a non-standard APP_URL port (local dev, e.g. :8002) on subdomain links. */
+    private static function portSuffix(): string
     {
-        return config('tenancy.custom_domains.txt_prefix', '_recurringpress') . '.' . $domain;
+        $port = parse_url((string) config('app.url'), PHP_URL_PORT);
+
+        return $port ? ':' . $port : '';
     }
 
-    public static function txtValue(string $token): string
+    /* ------------------------ Cloudflare verification ------------------------ */
+
+    /**
+     * Register the domain with Cloudflare (replacing any previous one) and store the DNS
+     * records the tenant has to add. Throws with Cloudflare's message on API errors.
+     */
+    public static function connect(CompanySetting $settings, string $domain, ?CloudflareCustomHostnames $cf = null): void
     {
-        return 'recurringpress-verify=' . $token;
+        $cf ??= app(CloudflareCustomHostnames::class);
+
+        $hostname = $cf->create($domain);
+
+        if ($settings->cf_hostname_id && $settings->cf_hostname_id !== ($hostname['id'] ?? null)) {
+            self::disconnect($settings, $cf);
+        }
+
+        $settings->forceFill([
+            'custom_domain' => $domain,
+            'custom_domain_verified_at' => null,
+            'custom_domain_checked_at' => now(),
+            'custom_domain_error' => null,
+        ])->save();
+
+        self::store($settings, $hostname);
     }
 
-    public static function cnameTarget(): string
+    /** Remove the custom hostname from Cloudflare (best effort) and clear it locally. */
+    public static function disconnect(CompanySetting $settings, ?CloudflareCustomHostnames $cf = null): void
     {
-        return strtolower((string) config('tenancy.custom_domains.cname_target'));
-    }
+        if ($settings->cf_hostname_id) {
+            try {
+                ($cf ?? app(CloudflareCustomHostnames::class))->delete($settings->cf_hostname_id);
+            } catch (\Throwable $e) {
+                Log::warning('Could not delete Cloudflare custom hostname', ['id' => $settings->cf_hostname_id, 'error' => $e->getMessage()]);
+            }
+        }
 
-    /** @return string[] IPs an apex A record may point at. */
-    public static function targetIps(DnsLookup $dns): array
-    {
-        $ips = config('tenancy.custom_domains.ips', []);
-
-        return $ips ?: $dns->a(self::cnameTarget());
+        $settings->forceFill([
+            'custom_domain' => null,
+            'cf_hostname_id' => null,
+            'cf_hostname_status' => null,
+            'cf_ssl_status' => null,
+            'cf_dns_records' => null,
+            'custom_domain_verified_at' => null,
+            'custom_domain_checked_at' => null,
+            'custom_domain_error' => null,
+        ])->save();
     }
 
     /**
-     * Check the domain's DNS. Returns null when everything is in place, otherwise a message
-     * the tenant can act on.
+     * Refresh the hostname's status from Cloudflare. It counts as verified once both the
+     * hostname and its certificate are active. With $grace, a verified domain is only
+     * un-verified after two failed checks in a row, so one hiccup doesn't break links.
      */
-    public static function check(string $domain, string $token, ?DnsLookup $dns = null): ?string
+    public static function verify(CompanySetting $settings, ?CloudflareCustomHostnames $cf = null, bool $grace = true): bool
     {
-        $dns ??= app(DnsLookup::class);
-
-        if (! in_array(self::txtValue($token), array_map('trim', $dns->txt(self::txtName($domain))), true)) {
-            return 'TXT record ' . self::txtName($domain) . ' was not found or does not match.';
-        }
-
-        $target = self::cnameTarget();
-        $cname = $dns->cname($domain);
-
-        if ($cname === $target) {
-            return null;
-        }
-
-        $targetIps = self::targetIps($dns);
-        $domainIps = $dns->a($domain);
-
-        if ($domainIps && $targetIps && array_intersect($domainIps, $targetIps) && ! array_diff($domainIps, $targetIps)) {
-            return null;
-        }
-
-        return $cname
-            ? "{$domain} is a CNAME to {$cname}, expected {$target}."
-            : "{$domain} does not point to {$target} yet (no matching CNAME or A record).";
-    }
-
-    /**
-     * Run the DNS check and persist the result. With $grace, a previously verified domain is
-     * only un-verified after two failed checks in a row, so one DNS hiccup doesn't break links.
-     */
-    public static function verify(CompanySetting $settings, ?DnsLookup $dns = null, bool $grace = true): bool
-    {
-        if (blank($settings->custom_domain) || blank($settings->custom_domain_token)) {
+        if (blank($settings->custom_domain)) {
             return false;
         }
 
-        $error = self::check($settings->custom_domain, $settings->custom_domain_token, $dns);
+        $cf ??= app(CloudflareCustomHostnames::class);
+
+        try {
+            $hostname = $settings->cf_hostname_id ? $cf->get($settings->cf_hostname_id) : null;
+            // Deleted on Cloudflare's side (or never created): register it again.
+            $hostname ??= $cf->create($settings->custom_domain);
+        } catch (\Throwable $e) {
+            // API outage: record it, but don't count it against the tenant's domain.
+            $settings->forceFill(['custom_domain_checked_at' => now(), 'custom_domain_error' => $e->getMessage()])->save();
+
+            return $settings->custom_domain_verified_at !== null;
+        }
+
+        $active = ($hostname['status'] ?? null) === 'active' && ($hostname['ssl']['status'] ?? null) === 'active';
+        $error = $active ? null : (CloudflareCustomHostnames::problemFor($hostname) ?? self::pendingMessage($hostname));
         $wasFailing = ! $grace || filled($settings->custom_domain_error);
 
         $settings->forceFill([
             'custom_domain_checked_at' => now(),
             'custom_domain_error' => $error,
             'custom_domain_verified_at' => match (true) {
-                $error === null => $settings->custom_domain_verified_at ?? now(),
+                $active => $settings->custom_domain_verified_at ?? now(),
                 $settings->custom_domain_verified_at !== null && ! $wasFailing => $settings->custom_domain_verified_at,
                 default => null,
             },
         ])->save();
 
-        return $error === null;
+        self::store($settings, $hostname);
+
+        return $active;
+    }
+
+    private static function store(CompanySetting $settings, array $hostname): void
+    {
+        $settings->forceFill([
+            'cf_hostname_id' => $hostname['id'] ?? $settings->cf_hostname_id,
+            'cf_hostname_status' => $hostname['status'] ?? null,
+            'cf_ssl_status' => $hostname['ssl']['status'] ?? null,
+            'cf_dns_records' => CloudflareCustomHostnames::recordsFor($hostname),
+        ])->save();
+    }
+
+    private static function pendingMessage(array $hostname): string
+    {
+        if (($hostname['status'] ?? null) !== 'active') {
+            return 'Waiting for the DNS records below (Cloudflare status: ' . str_replace('_', ' ', $hostname['status'] ?? 'pending') . ').';
+        }
+
+        return 'Domain confirmed; the SSL certificate is being issued (status: ' . str_replace('_', ' ', $hostname['ssl']['status'] ?? 'pending') . ').';
     }
 }

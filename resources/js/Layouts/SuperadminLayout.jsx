@@ -57,6 +57,7 @@ const groups = [
             { label: 'General', route: 'superadmin.settings.general', icon: Settings2 },
             { label: 'Stripe', route: 'superadmin.settings.stripe', icon: CreditCard },
             { label: 'Email (SMTP)', route: 'superadmin.settings.smtp', icon: Mail },
+            { label: 'Custom domains', route: 'superadmin.settings.custom-domains', icon: Globe },
             { label: 'Payout settings', route: 'superadmin.settings.payouts', icon: Landmark },
             { label: 'Updates', route: 'superadmin.updates.index', icon: Download },
             { label: 'Queues (Horizon)', href: '/horizon', icon: Activity, external: true },

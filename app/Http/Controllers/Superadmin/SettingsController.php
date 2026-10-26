@@ -4,8 +4,12 @@ namespace App\Http\Controllers\Superadmin;
 
 use App\Http\Controllers\Controller;
 use App\Mail\TestMail;
+use App\Models\CompanySetting;
 use App\Models\SystemSetting;
+use App\Services\CloudflareCustomHostnames;
+use App\Support\TenantDomain;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -226,6 +230,89 @@ class SettingsController extends Controller
 
             return back()->with('error', 'Sending failed: ' . $e->getMessage());
         }
+    }
+
+    /* ------------------- Custom domains (Cloudflare for SaaS) ------------------- */
+
+    public function customDomains()
+    {
+        return Inertia::render('Superadmin/Settings/CustomDomains', [
+            'settings' => [
+                'custom_domains_enabled' => $this->bool(SystemSetting::get('custom_domains_enabled')),
+                'tenant_subdomains_enabled' => $this->bool(SystemSetting::get('tenant_subdomains_enabled')),
+                'cloudflare_zone_id' => SystemSetting::get('cloudflare_zone_id'),
+                'cloudflare_cname_target' => SystemSetting::get('cloudflare_cname_target'),
+            ],
+            // The token is write-only: only whether one is saved (and still decryptable).
+            'hasToken' => filled(CloudflareCustomHostnames::token()),
+            'configured' => CloudflareCustomHostnames::configured(),
+            'subdomainBase' => TenantDomain::subdomainBase(),
+            'stats' => [
+                'domains' => CompanySetting::whereNotNull('custom_domain')->count(),
+                'verified' => CompanySetting::whereNotNull('custom_domain_verified_at')->count(),
+                'subdomains' => CompanySetting::whereNotNull('subdomain')->count(),
+            ],
+        ]);
+    }
+
+    public function updateCustomDomains(Request $request)
+    {
+        $validated = $request->validate([
+            'custom_domains_enabled' => 'boolean',
+            'tenant_subdomains_enabled' => 'boolean',
+            'cloudflare_zone_id' => ['nullable', 'string', 'regex:/^[a-f0-9]{32}$/i'],
+            'cloudflare_api_token' => 'nullable|string|max:255',
+            'cloudflare_cname_target' => ['nullable', 'string', 'max:253'],
+        ], [
+            'cloudflare_zone_id.regex' => 'The zone ID is the 32-character hex ID shown on the zone’s Overview page.',
+        ]);
+
+        $target = filled($validated['cloudflare_cname_target'] ?? null) ? TenantDomain::normalize($validated['cloudflare_cname_target']) : null;
+
+        if (filled($validated['cloudflare_cname_target'] ?? null) && ! $target) {
+            throw ValidationException::withMessages(['cloudflare_cname_target' => 'Enter a hostname such as customers.recurringpress.com.']);
+        }
+
+        if ($request->boolean('custom_domains_enabled') && (blank($validated['cloudflare_zone_id'] ?? null) || blank($target)
+            || (blank($validated['cloudflare_api_token'] ?? null) && ! CloudflareCustomHostnames::token()))) {
+            throw ValidationException::withMessages(['custom_domains_enabled' => 'Enter the zone ID, API token and CNAME target before switching custom domains on.']);
+        }
+
+        SystemSetting::setMany([
+            'custom_domains_enabled' => $request->boolean('custom_domains_enabled') ? '1' : '0',
+            'tenant_subdomains_enabled' => $request->boolean('tenant_subdomains_enabled') ? '1' : '0',
+            'cloudflare_zone_id' => strtolower((string) ($validated['cloudflare_zone_id'] ?? '')) ?: null,
+            'cloudflare_cname_target' => $target,
+        ]);
+
+        if (filled($validated['cloudflare_api_token'] ?? null)) {
+            CloudflareCustomHostnames::storeToken(trim($validated['cloudflare_api_token'])); // write-only
+        }
+
+        return back()->with('success', 'Custom domain settings saved.');
+    }
+
+    public function testCloudflare(CloudflareCustomHostnames $cloudflare)
+    {
+        try {
+            $result = $cloudflare->testConnection();
+        } catch (\Throwable $e) {
+            Log::warning('Cloudflare connection test failed', ['error' => $e->getMessage()]);
+
+            return back()->with('error', $e->getMessage());
+        }
+
+        $message = 'Connected to zone ' . ($result['zone'] ?? '?') . '.';
+
+        if (! $result['fallback_origin']) {
+            return back()->with('warning', $message . ' No fallback origin is set yet: set it under SSL/TLS → Custom Hostnames to your CNAME target.');
+        }
+
+        if ($result['fallback_origin'] !== CloudflareCustomHostnames::cnameTarget()) {
+            return back()->with('warning', $message . " The fallback origin is {$result['fallback_origin']}, but the CNAME target here is " . CloudflareCustomHostnames::cnameTarget() . '. They should match.');
+        }
+
+        return back()->with('success', $message . " Fallback origin {$result['fallback_origin']} is {$result['fallback_status']}.");
     }
 
     /* ------------------------------ Payouts ------------------------------ */

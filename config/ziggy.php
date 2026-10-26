@@ -5,7 +5,7 @@
  * (see HandleInertiaRequests). Tenant/public pages never learn superadmin, Horizon or
  * installer URLs. Patterns prefixed with "!" are exclusions.
  */
-$internal = ['!install.*', '!autoinstall.*', '!horizon.*', '!stripe.webhook', '!custom-domains.tls', '!storage.*', '!sanctum.*', '!ignition.*'];
+$internal = ['!install.*', '!autoinstall.*', '!horizon.*', '!stripe.webhook', '!storage.*', '!sanctum.*', '!ignition.*'];
 
 return [
     'groups' => [

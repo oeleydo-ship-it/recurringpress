@@ -86,10 +86,6 @@ Route::post('/quotation/{token}/reject', [PublicQuotationController::class, 'rej
 Route::post('/quotation/{token}/payment', [PublicQuotationController::class, 'selectPayment'])->name('quotations.public.payment');
 Route::post('/quotation/{token}/stripe/intent', [PublicQuotationController::class, 'createStripeIntent'])->middleware('throttle:public-actions')->name('quotations.public.stripe.intent');
 Route::get('/quotation/{token}/stripe/success', [PublicQuotationController::class, 'stripeSuccess'])->name('quotations.public.stripe.success');
-// On-demand TLS "ask" endpoint for the reverse proxy (see INSTALL.md, "Custom domains").
-Route::get('/tls/allowed', \App\Http\Controllers\CustomDomainTlsController::class)
-    ->middleware('throttle:120,1')
-    ->name('custom-domains.tls');
 Route::post('/stripe/webhook', [PaymentController::class, 'handleWebhook'])
     ->middleware('throttle:60,1')
     ->name('stripe.webhook');
@@ -217,7 +213,9 @@ Route::middleware(['auth', 'tenant', 'verified', \App\Http\Middleware\CheckOnboa
         Route::put('/settings/domain', [SettingsController::class, 'updateDomain'])->name('settings.domain');
         Route::post('/settings/domain/verify', [SettingsController::class, 'verifyDomain'])->middleware('throttle:10,1')->name('settings.domain.verify');
         Route::delete('/settings/domain', [SettingsController::class, 'removeDomain'])->name('settings.domain.remove');
-        Route::put('/settings/email', [SettingsController::class, 'updateEmail'])->name('settings.email');
+        Route::put('/settings/subdomain', [SettingsController::class, 'updateSubdomain'])->middleware('throttle:10,1')->name('settings.subdomain');
+        Route::delete('/settings/subdomain', [SettingsController::class, 'removeSubdomain'])->name('settings.subdomain.remove');
+        Route::put('/settings/email',[SettingsController::class, 'updateEmail'])->name('settings.email');
         Route::post('/settings/email/test', [SettingsController::class, 'testEmail'])->middleware('throttle:6,1')->name('settings.email.test');
     });
 });
@@ -258,6 +256,9 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
         Route::get('/settings/smtp', [SuperadminSettingsController::class, 'smtp'])->name('settings.smtp');
         Route::put('/settings/smtp', [SuperadminSettingsController::class, 'updateSmtp'])->name('settings.smtp.update');
         Route::post('/settings/smtp/test', [SuperadminSettingsController::class, 'sendTestEmail'])->name('settings.smtp.test');
+        Route::get('/settings/custom-domains', [SuperadminSettingsController::class, 'customDomains'])->name('settings.custom-domains');
+        Route::put('/settings/custom-domains', [SuperadminSettingsController::class, 'updateCustomDomains'])->name('settings.custom-domains.update');
+        Route::post('/settings/custom-domains/test', [SuperadminSettingsController::class, 'testCloudflare'])->middleware('throttle:10,1')->name('settings.custom-domains.test');
         Route::get('/settings/payouts', [SuperadminSettingsController::class, 'payouts'])->name('settings.payouts');
         Route::put('/settings/payouts', [SuperadminSettingsController::class, 'updatePayouts'])->name('settings.payouts.update');
 
