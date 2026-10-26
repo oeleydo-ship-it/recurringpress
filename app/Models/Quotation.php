@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Support\TenantDomain;
 use Illuminate\Support\Str;
 
 class Quotation extends Model
@@ -91,7 +92,7 @@ class Quotation extends Model
 
     public function getShareUrlAttribute(): string
     {
-        return route('quotations.public', $this->share_token);
+        return TenantDomain::url($this->company, route('quotations.public', $this->share_token, false));
     }
 
     public function isExpired(): bool

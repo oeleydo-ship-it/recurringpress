@@ -26,6 +26,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // webhook was rejected with 419.
         $middleware->preventRequestForgery(except: ['stripe/webhook']);
 
+        // Custom-domain requests: restrict to the owning tenant's public pages (before sessions start).
+        $middleware->web(prepend: [
+            \App\Http\Middleware\ResolveCustomDomain::class,
+        ]);
+
         $middleware->web(append: [
             \App\Http\Middleware\CheckInstallation::class,
             \App\Http\Middleware\DetectPendingInstall::class,

@@ -156,6 +156,82 @@ php artisan up
 * Serve over HTTPS and set `SESSION_SECURE_COOKIE=true`.
 * Extra disposable-email domains can be blocked with `DISPOSABLE_EMAIL_DOMAINS=foo.com,bar.net`.
 
+### 8. Tenant custom domains
+
+Tenants can connect their own domain (Settings → Custom domain), e.g. `billing.theirdomain.com`. Once its DNS
+is verified, their public invoice/quotation pages work on that domain and new emails link to it. Old links on
+the platform address keep working.
+
+**How it works**
+
+* The tenant adds two DNS records: a TXT record `_recurringpress.<domain>` = `recurringpress-verify=<token>`
+  (proves ownership) and a CNAME `<domain>` → the `APP_URL` host (or A records to the server IP for a root domain).
+* "Verify DNS" checks both. `domains:recheck` runs hourly: it verifies pending domains, and un-verifies a domain
+  after two failed checks in a row.
+* On a custom domain, only `/invoice/*` and `/quotation/*` are served, and only for that tenant's documents
+  (another tenant's token returns 404). Other GET paths redirect to `APP_URL`. When the feature is on, any host
+  that is neither a platform host nor a verified tenant domain gets a bare `404 Not Found`. Platform hosts are
+  the `APP_URL` host and its `www.` variant, `localhost`, and IP addresses; add any others with
+  `PLATFORM_HOSTS=a.com,b.com`.
+
+**The feature is off by default** (`CUSTOM_DOMAINS_ENABLED=false`) because it needs server work first. Links are
+built as `https://<tenant-domain>/…`, so the server must be able to present a TLS certificate for every tenant
+domain. A single certificate for recurringpress.com won't cover them, and plain nginx can't issue certificates
+on demand. The production server currently answers as `nginx/1.24.0 (Ubuntu)` with no CDN in front, so pick one of:
+
+1. **Caddy in front, on-demand TLS (recommended for a single VPS).** Caddy listens on 80/443 and gets a
+   Let's Encrypt certificate the first time a verified domain is visited. nginx moves to `127.0.0.1:8080`.
+   The app exposes the "ask" endpoint `GET /tls/allowed?domain=…`. It returns 200 only for platform hosts and
+   verified tenant domains, so nobody can make the server request certificates for arbitrary domains.
+
+   ```caddy
+   {
+       on_demand_tls {
+           ask http://127.0.0.1:8080/tls/allowed
+       }
+   }
+
+   recurringpress.com, www.recurringpress.com {
+       reverse_proxy 127.0.0.1:8080
+   }
+
+   https:// {
+       tls {
+           on_demand
+       }
+       reverse_proxy 127.0.0.1:8080
+   }
+   ```
+
+   Then make the nginx vhost the default server on `127.0.0.1:8080` (`listen 127.0.0.1:8080 default_server;`
+   `server_name _;`) so it accepts any Host. Laravel rejects unknown hosts itself. Trust the proxy so the app
+   sees `https` and the client IP (`TrustProxies` for `127.0.0.1`).
+2. **Cloudflare for SaaS (Custom Hostnames).** Cloudflare issues the certificates. Tenants CNAME to your
+   fallback origin hostname, so set `CUSTOM_DOMAIN_CNAME_TARGET` to it. nginx must still accept any Host.
+3. **certbot per domain.** Run `certbot --nginx -d <domain>` for each verified domain and add a `server_name`.
+   This works but is manual, so only use it for a handful of tenants.
+
+When the chosen setup serves HTTPS for a test domain, set `CUSTOM_DOMAINS_ENABLED=true` and run
+`php artisan optimize`. Also check that `SESSION_DOMAIN` is empty or the platform domain: on custom domains the app
+switches to host-only session cookies automatically.
+
+Related env vars: `CUSTOM_DOMAIN_CNAME_TARGET` (default: `APP_URL` host), `CUSTOM_DOMAIN_IPS` (A-record IPs
+shown for root domains; default: whatever the CNAME target resolves to), `CUSTOM_DOMAIN_SCHEME` (default `https`).
+
+### 9. Tenant SMTP
+
+Tenants can send client emails (invoices and quotations, including recurring ones) through their own SMTP server
+(Settings → Email (SMTP)). The password is stored with Laravel's `encrypted` cast, so it depends on `APP_KEY`:
+rotating the key makes saved passwords unreadable, and tenants must re-enter them.
+
+* A server is only used after "Send test email" succeeds. Changing host, port, encryption, username, password or
+  From address requires a new test.
+* If the tenant's server fails at send time, the error is logged and shown in their settings. The email is sent
+  through the platform mailer instead, with Reply-To set to the company email.
+* In production, SMTP hosts on private, loopback or reserved addresses are refused, and only ports
+  25/465/587/2525 are allowed (SSRF protection; `TENANT_SMTP_BLOCK_PRIVATE`). Outbound connections to those
+  ports must be allowed by the server's firewall and hosting provider.
+
 ***
 
 **Need Help?**

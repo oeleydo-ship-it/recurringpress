@@ -7,7 +7,12 @@ use App\Models\Company;
 use App\Models\CompanySetting;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
+use App\Services\DnsLookup;
+use App\Services\TenantMailer;
+use App\Support\TenantDomain;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -51,7 +56,172 @@ class SettingsController extends Controller
                 'timezones' => \DateTimeZone::listIdentifiers(),
             ],
             'webhookUrl' => route('stripe.webhook'),
+            'domain' => $this->domainPayload($settings),
+            'smtp' => [
+                ...$settings->only(['smtp_enabled', 'smtp_host', 'smtp_port', 'smtp_encryption', 'smtp_username', 'smtp_from_address', 'smtp_from_name', 'smtp_last_error']),
+                'has_password' => filled($settings->smtp_password),
+                'verified_at' => $settings->smtp_verified_at?->toIso8601String(),
+                'last_error_at' => $settings->smtp_last_error_at?->toIso8601String(),
+                'in_use' => $settings->usesOwnSmtp(),
+                'test_to' => auth()->user()->email,
+            ],
         ]);
+    }
+
+    private function domainPayload(CompanySetting $settings): array
+    {
+        $domain = $settings->custom_domain;
+
+        return [
+            'enabled' => TenantDomain::enabled(),
+            'domain' => $domain,
+            'verified' => $settings->hasVerifiedCustomDomain(),
+            'verified_at' => $settings->custom_domain_verified_at?->toIso8601String(),
+            'checked_at' => $settings->custom_domain_checked_at?->toIso8601String(),
+            'error' => $settings->custom_domain_error,
+            'txt_name' => $domain ? TenantDomain::txtName($domain) : null,
+            'txt_value' => $settings->custom_domain_token ? TenantDomain::txtValue($settings->custom_domain_token) : null,
+            'cname_target' => TenantDomain::cnameTarget(),
+            'target_ips' => TenantDomain::targetIps(app(DnsLookup::class)),
+        ];
+    }
+
+    /* --------------------------- Custom domain --------------------------- */
+
+    public function updateDomain(Request $request)
+    {
+        abort_unless(TenantDomain::enabled(), 404);
+
+        $request->validate(['custom_domain' => 'required|string|max:253']);
+
+        $domain = TenantDomain::normalize($request->input('custom_domain'));
+
+        if (! $domain) {
+            throw ValidationException::withMessages(['custom_domain' => 'Enter a domain name such as billing.yourcompany.com.']);
+        }
+        if (TenantDomain::isReserved($domain)) {
+            throw ValidationException::withMessages(['custom_domain' => 'This domain can’t be used.']);
+        }
+
+        $settings = $this->settings();
+
+        if ($settings->custom_domain === $domain) {
+            return back();
+        }
+
+        if (CompanySetting::where('custom_domain', $domain)->whereKeyNot($settings->id)->exists()) {
+            throw ValidationException::withMessages(['custom_domain' => 'This domain is already connected to another account.']);
+        }
+
+        $settings->forceFill([
+            'custom_domain' => $domain,
+            'custom_domain_token' => TenantDomain::newToken(),
+            'custom_domain_verified_at' => null,
+            'custom_domain_checked_at' => null,
+            'custom_domain_error' => null,
+        ])->save();
+
+        return back()->with('success', 'Domain saved. Add the DNS records below, then click Verify.');
+    }
+
+    public function verifyDomain()
+    {
+        abort_unless(TenantDomain::enabled(), 404);
+
+        $settings = $this->settings();
+
+        if (blank($settings->custom_domain)) {
+            return back()->with('error', 'Add a domain first.');
+        }
+
+        // A manual check always reflects the current DNS (no grace period).
+        return TenantDomain::verify($settings, grace: false)
+            ? back()->with('success', $settings->custom_domain . ' is verified. New emails will link to it.')
+            : back()->with('error', 'Not verified yet: ' . $settings->custom_domain_error . ' DNS changes can take up to an hour to show up.');
+    }
+
+    public function removeDomain()
+    {
+        $this->settings()->forceFill([
+            'custom_domain' => null,
+            'custom_domain_token' => null,
+            'custom_domain_verified_at' => null,
+            'custom_domain_checked_at' => null,
+            'custom_domain_error' => null,
+        ])->save();
+
+        return back()->with('success', 'Custom domain removed. Links use the platform address again.');
+    }
+
+    /* ------------------------------ Email (SMTP) ------------------------------ */
+
+    public function updateEmail(Request $request)
+    {
+        $validated = $request->validate([
+            'smtp_enabled' => 'boolean',
+            'smtp_host' => ['required_if_accepted:smtp_enabled', 'nullable', 'string', 'max:255', 'regex:/^[A-Za-z0-9.-]+$/'],
+            'smtp_port' => 'required_if_accepted:smtp_enabled|nullable|integer|min:1|max:65535',
+            'smtp_encryption' => ['required', Rule::in(TenantMailer::ENCRYPTIONS)],
+            'smtp_username' => 'nullable|string|max:255',
+            'smtp_password' => 'nullable|string|max:255',
+            'smtp_from_address' => 'required_if_accepted:smtp_enabled|nullable|email:rfc,filter|max:255',
+            'smtp_from_name' => 'nullable|string|max:255',
+        ]);
+        $validated['smtp_enabled'] = $request->boolean('smtp_enabled');
+
+        if (filled($validated['smtp_host'] ?? null) && ($reason = TenantMailer::hostRejection($validated['smtp_host'], (int) ($validated['smtp_port'] ?? 0)))) {
+            throw ValidationException::withMessages(['smtp_host' => $reason]);
+        }
+
+        if (blank($validated['smtp_password'] ?? null)) {
+            unset($validated['smtp_password']); // write-only: blank keeps the saved password
+        }
+
+        $settings = $this->settings();
+        $settings->fill($validated);
+
+        // Any change to how we connect needs a fresh successful test before it's used.
+        if ($settings->isDirty(['smtp_host', 'smtp_port', 'smtp_encryption', 'smtp_username', 'smtp_password', 'smtp_from_address'])) {
+            $settings->smtp_verified_at = null;
+        }
+
+        $settings->save();
+
+        if ($settings->smtp_enabled && ! $settings->smtp_verified_at) {
+            return back()->with('success', 'Saved. Send a test email to start using this server.');
+        }
+
+        return back()->with('success', 'Email settings saved.');
+    }
+
+    public function testEmail(Request $request, TenantMailer $mailer)
+    {
+        $request->validate(['test_to' => 'required|email:rfc,filter|max:255']);
+
+        $settings = $this->settings();
+
+        if (blank($settings->smtp_host) || blank($settings->smtp_from_address)) {
+            return back()->with('error', 'Save your SMTP server and From address first.');
+        }
+
+        try {
+            $mailer->sendTest($settings, $request->input('test_to'));
+        } catch (\Throwable $e) {
+            Log::info('Tenant SMTP test failed', ['company_id' => $settings->company_id, 'error' => $e->getMessage()]);
+
+            $settings->forceFill([
+                'smtp_verified_at' => null,
+                'smtp_last_error' => mb_substr($e->getMessage(), 0, 1000),
+                'smtp_last_error_at' => now(),
+            ])->save();
+
+            return back()->with('error', 'Test failed: ' . mb_substr($e->getMessage(), 0, 300));
+        }
+
+        $settings->forceFill(['smtp_verified_at' => now(), 'smtp_last_error' => null, 'smtp_last_error_at' => null])->save();
+
+        return back()->with('success', 'Test email sent to ' . $request->input('test_to') . '.'
+            . ($settings->smtp_enabled ? ' Client emails now go through your server.' : ' Turn on “Use my SMTP server” to use it for client emails.'));
     }
 
     public function updateCompany(Request $request)

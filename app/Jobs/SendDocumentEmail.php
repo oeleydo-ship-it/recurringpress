@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Invoice;
 use App\Models\Quotation;
+use App\Services\TenantMailer;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -11,7 +12,6 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 use Throwable;
 
 /**
@@ -35,7 +35,7 @@ class SendDocumentEmail implements ShouldQueue
         $this->onQueue('mail');
     }
 
-    public function handle(): void
+    public function handle(TenantMailer $mailers): void
     {
         $doc = $this->document->loadMissing(['client', 'items', 'company.settings']);
         $isInvoice = $doc instanceof Invoice;
@@ -56,7 +56,8 @@ class SendDocumentEmail implements ShouldQueue
 
         $pdf = Pdf::loadView($view, [$var => $doc])->output();
 
-        Mail::send("emails.{$var}", [$var => $doc], function ($message) use ($recipient, $label, $number, $doc, $pdf) {
+        // Tenant's own SMTP when configured and tested; otherwise (or if it fails) the platform mailer.
+        $mailers->send($doc->company, "emails.{$var}", [$var => $doc], function ($message) use ($recipient, $label, $number, $doc, $pdf) {
             $message->to($recipient);
             $message->subject("{$label} {$number} from {$doc->company->name}");
             $message->attachData($pdf, strtolower($label) . "-{$number}.pdf", ['mime' => 'application/pdf']);

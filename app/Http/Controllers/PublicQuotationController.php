@@ -6,6 +6,7 @@ use App\Models\Quotation;
 use App\Notifications\QuotationResponseNotification;
 use App\Services\StripeGateway;
 use App\Support\PublicDocument;
+use App\Support\TenantDomain;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -211,6 +212,7 @@ class PublicQuotationController extends Controller
         return Quotation::withoutGlobalScopes()
             ->with(['company.settings', 'company.users', 'items', 'client' => fn ($q) => $q->withoutGlobalScopes()])
             ->where('share_token', $token)
+            ->tap(fn ($query) => TenantDomain::scopeToRequestDomain($query))
             ->firstOrFail();
     }
 

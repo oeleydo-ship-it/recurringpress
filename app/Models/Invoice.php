@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Builder;
+use App\Support\TenantDomain;
 use Illuminate\Support\Str;
 
 class Invoice extends Model
@@ -135,7 +136,8 @@ class Invoice extends Model
 
     public function getShareUrlAttribute(): string
     {
-        return route('invoices.public', $this->share_token);
+        // On the company's verified custom domain when it has one (also from queued jobs).
+        return TenantDomain::url($this->company, route('invoices.public', $this->share_token, false));
     }
 
     public function isOverdue(): bool

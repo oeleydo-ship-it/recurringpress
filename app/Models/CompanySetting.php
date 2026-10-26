@@ -17,6 +17,7 @@ class CompanySetting extends Model
     protected $hidden = [
         'stripe_secret_key',
         'stripe_webhook_secret',
+        'smtp_password',
     ];
 
     protected $fillable = [
@@ -63,6 +64,14 @@ class CompanySetting extends Model
         'show_quotation_website',
         'show_quotation_message',
         'quotation_message',
+        'smtp_enabled',
+        'smtp_host',
+        'smtp_port',
+        'smtp_encryption',
+        'smtp_username',
+        'smtp_password',
+        'smtp_from_address',
+        'smtp_from_name',
     ];
 
     protected $casts = [
@@ -81,7 +90,26 @@ class CompanySetting extends Model
         'show_invoice_footer' => 'boolean',
         'show_quotation_website' => 'boolean',
         'show_quotation_message' => 'boolean',
+        'custom_domain_verified_at' => 'datetime',
+        'custom_domain_checked_at' => 'datetime',
+        'smtp_enabled' => 'boolean',
+        'smtp_port' => 'integer',
+        'smtp_password' => 'encrypted',
+        'smtp_verified_at' => 'datetime',
+        'smtp_last_error_at' => 'datetime',
     ];
+
+    /** A custom domain is only used for links once its DNS has been verified. */
+    public function hasVerifiedCustomDomain(): bool
+    {
+        return config('tenancy.custom_domains.enabled') && filled($this->custom_domain) && $this->custom_domain_verified_at !== null;
+    }
+
+    /** Client emails go through the tenant's SMTP only when it is switched on and a test send succeeded. */
+    public function usesOwnSmtp(): bool
+    {
+        return $this->smtp_enabled && filled($this->smtp_host) && filled($this->smtp_from_address) && $this->smtp_verified_at !== null;
+    }
 
     public static function invoiceTemplates(): array
     {

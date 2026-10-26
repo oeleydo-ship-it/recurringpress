@@ -6,6 +6,7 @@ use App\Models\CompanySetting;
 use App\Models\Invoice;
 use App\Services\StripeGateway;
 use App\Support\PublicDocument;
+use App\Support\TenantDomain;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -155,6 +156,7 @@ class PublicInvoiceController extends Controller
         return Invoice::withoutGlobalScopes()
             ->with(['company.settings', 'client' => fn ($q) => $q->withoutGlobalScopes(), 'items'])
             ->where('share_token', $token)
+            ->tap(fn ($query) => TenantDomain::scopeToRequestDomain($query))
             ->firstOrFail();
     }
 

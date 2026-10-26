@@ -1,12 +1,12 @@
-import { Link, useForm } from '@inertiajs/react';
-import { Building2, Check, CreditCard, FileSignature, FileText, ImagePlus, NotebookPen, Palette, Save, Settings2, Sparkles, X } from 'lucide-react';
+import { Link, router, useForm } from '@inertiajs/react';
+import { AlertTriangle, Building2, Check, Copy, CreditCard, FileSignature, FileText, Globe, ImagePlus, Mail, NotebookPen, Palette, RefreshCw, Save, Send, Settings2, Sparkles, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import TemplateThumbnail from '@/Components/TemplateThumbnail';
-import { Button, Card, CardBody, CardFooter, CardHeader, FieldError, FormField, Input, PageHeader, Segmented, Select, Switch, Tabs, Textarea } from '@/Components/ui';
+import { Badge, Button, Card, CardBody, CardFooter, CardHeader, FieldError, FormField, Input, PageHeader, Segmented, Select, Switch, Tabs, Textarea, useConfirm } from '@/Components/ui';
 import { route } from '@/lib/route';
-import { cn } from '@/lib/utils';
+import { cn, formatDateTime } from '@/lib/utils';
 
-export default function SettingsIndex({ company, settings, options, webhookUrl }) {
+export default function SettingsIndex({ company, settings, options, webhookUrl, domain, smtp }) {
     return (
         <>
             <PageHeader
@@ -27,6 +27,8 @@ export default function SettingsIndex({ company, settings, options, webhookUrl }
                     { key: 'quotations', label: 'Quotations', icon: FileSignature, content: <QuotationTab company={company} settings={settings} /> },
                     { key: 'payments', label: 'Payments', icon: CreditCard, content: <PaymentsTab settings={settings} webhookUrl={webhookUrl} /> },
                     { key: 'appearance', label: 'Appearance', icon: Palette, content: <AppearanceTab settings={settings} options={options} /> },
+                    { key: 'domain', label: 'Custom domain', icon: Globe, content: <DomainTab domain={domain} /> },
+                    { key: 'email', label: 'Email (SMTP)', icon: Mail, content: <EmailTab smtp={smtp} /> },
                     { key: 'preferences', label: 'Preferences', icon: Settings2, content: <PreferencesTab settings={settings} options={options} /> },
                     { key: 'notes', label: 'Notes & terms', icon: NotebookPen, content: <NotesTab settings={settings} /> },
                 ]}
@@ -504,5 +506,282 @@ function NotesTab({ settings }) {
                 <Textarea rows={6} {...bind(form, 'default_terms')} />
             </FormField>
         </Section>
+    );
+}
+
+/* --------------------------- Custom domain --------------------------- */
+
+function CopyValue({ value }) {
+    const [copied, setCopied] = useState(false);
+    return (
+        <span className="flex min-w-0 items-center gap-1.5">
+            <code className="min-w-0 break-all rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-800">{value}</code>
+            <button
+                type="button"
+                className="shrink-0 text-slate-400 hover:text-slate-700"
+                title="Copy"
+                onClick={() => {
+                    navigator.clipboard?.writeText(value);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1500);
+                }}
+            >
+                {copied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
+            </button>
+        </span>
+    );
+}
+
+function DomainTab({ domain }) {
+    const confirm = useConfirm();
+    const [editing, setEditing] = useState(!domain.domain);
+    const [verifying, setVerifying] = useState(false);
+    const form = useForm({ custom_domain: domain.domain ?? '' });
+
+    if (!domain.enabled) {
+        return (
+            <Card>
+                <CardHeader title="Custom domain" description="Show invoice and quotation links on your own domain, e.g. billing.yourcompany.com." />
+                <CardBody>
+                    <p className="text-sm text-slate-500">Custom domains aren’t available on this installation yet. Your links use the platform address.</p>
+                </CardBody>
+            </Card>
+        );
+    }
+
+    if (editing || !domain.domain) {
+        return (
+            <Section
+                title="Custom domain"
+                description="Show invoice and quotation links on your own domain, e.g. billing.yourcompany.com."
+                form={form}
+                submitLabel="Save domain"
+                onSubmit={() => form.put(route('settings.domain'), { preserveScroll: true, onSuccess: () => setEditing(false) })}
+            >
+                <Field form={form} name="custom_domain" label="Domain" placeholder="billing.yourcompany.com" hint="A subdomain you control. Clients will see links like https://billing.yourcompany.com/invoice/…" />
+                {domain.domain ? (
+                    <button type="button" className="text-sm font-medium text-slate-500 hover:text-slate-700" onClick={() => setEditing(false)}>
+                        Cancel
+                    </button>
+                ) : null}
+            </Section>
+        );
+    }
+
+    const isSub = domain.domain.split('.').length > 2;
+
+    return (
+        <Card>
+            <CardHeader
+                title="Custom domain"
+                description="Client-facing invoice and quotation pages, and the links in your emails, use this domain once it is verified."
+                actions={domain.verified ? <Badge tone="green" dot>Verified</Badge> : <Badge tone="yellow" dot>Pending verification</Badge>}
+            />
+            <CardBody className="space-y-5">
+                <div className="flex flex-wrap items-center gap-3">
+                    <span className="font-mono text-base font-semibold text-slate-900">{domain.domain}</span>
+                    <button type="button" className="text-sm font-medium text-brand-600" onClick={() => setEditing(true)}>
+                        Change
+                    </button>
+                </div>
+
+                {domain.error ? (
+                    <div className="flex gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                        <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                        <span>
+                            {domain.verified ? 'The last automatic check failed: ' : 'Not verified yet: '}
+                            {domain.error}
+                            {domain.checked_at ? <span className="text-amber-700/80"> (checked {formatDateTime(domain.checked_at)})</span> : null}
+                        </span>
+                    </div>
+                ) : null}
+
+                <div>
+                    <p className="mb-2 text-sm font-medium text-slate-700">Add these DNS records at your domain provider</p>
+                    <div className="overflow-x-auto rounded-xl ring-1 ring-slate-200">
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                                <tr>
+                                    <th className="px-3 py-2 font-medium">Type</th>
+                                    <th className="px-3 py-2 font-medium">Name / host</th>
+                                    <th className="px-3 py-2 font-medium">Value / target</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 align-top">
+                                <tr>
+                                    <td className="px-3 py-2.5 font-mono text-xs font-semibold">TXT</td>
+                                    <td className="px-3 py-2.5">
+                                        <CopyValue value={domain.txt_name} />
+                                    </td>
+                                    <td className="px-3 py-2.5">
+                                        <CopyValue value={domain.txt_value} />
+                                    </td>
+                                </tr>
+                                {isSub ? (
+                                    <tr>
+                                        <td className="px-3 py-2.5 font-mono text-xs font-semibold">CNAME</td>
+                                        <td className="px-3 py-2.5">
+                                            <CopyValue value={domain.domain} />
+                                        </td>
+                                        <td className="px-3 py-2.5">
+                                            <CopyValue value={domain.cname_target} />
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    (domain.target_ips.length ? domain.target_ips : ['(server IP)']).map((ip) => (
+                                        <tr key={ip}>
+                                            <td className="px-3 py-2.5 font-mono text-xs font-semibold">A</td>
+                                            <td className="px-3 py-2.5">
+                                                <CopyValue value={domain.domain} />
+                                            </td>
+                                            <td className="px-3 py-2.5">
+                                                <CopyValue value={ip} />
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p className="mt-2 text-xs text-slate-500">
+                        {isSub
+                            ? `Point the subdomain at ${domain.cname_target} with a CNAME record.`
+                            : `A root domain can’t use a CNAME, so add A records instead. A subdomain such as billing.${domain.domain} is easier.`}{' '}
+                        The TXT record proves the domain is yours. Keep both records in place: the domain is re-checked automatically. DNS changes can take up to an hour.
+                    </p>
+                </div>
+
+                {domain.verified ? (
+                    <p className="text-sm text-emerald-700">
+                        Verified{domain.verified_at ? ` on ${formatDateTime(domain.verified_at)}` : ''}. New invoice and quotation emails link to https://{domain.domain}. Older links on the platform address keep working.
+                    </p>
+                ) : null}
+            </CardBody>
+            <CardFooter>
+                <Button
+                    variant="ghost"
+                    icon={Trash2}
+                    className="mr-auto text-red-600"
+                    onClick={async () => {
+                        if (await confirm({ title: `Disconnect ${domain.domain}?`, message: 'Links will use the platform address again. Links already sent with your domain will stop working.', confirmText: 'Disconnect' })) {
+                            router.delete(route('settings.domain.remove'), { preserveScroll: true, onSuccess: () => form.setData('custom_domain', '') });
+                        }
+                    }}
+                >
+                    Disconnect
+                </Button>
+                <Button
+                    icon={RefreshCw}
+                    loading={verifying}
+                    onClick={() => router.post(route('settings.domain.verify'), {}, { preserveScroll: true, onStart: () => setVerifying(true), onFinish: () => setVerifying(false) })}
+                >
+                    {domain.verified ? 'Check again' : 'Verify DNS'}
+                </Button>
+            </CardFooter>
+        </Card>
+    );
+}
+
+/* ------------------------------ Email (SMTP) ------------------------------ */
+
+const ENCRYPTIONS = { tls: 'STARTTLS (usually port 587)', ssl: 'SSL/TLS (usually port 465)', none: 'None (not recommended)' };
+
+function EmailTab({ smtp }) {
+    const form = useForm({
+        smtp_enabled: Boolean(smtp.smtp_enabled),
+        smtp_host: smtp.smtp_host ?? '',
+        smtp_port: smtp.smtp_port ?? 587,
+        smtp_encryption: smtp.smtp_encryption ?? 'tls',
+        smtp_username: smtp.smtp_username ?? '',
+        smtp_password: '',
+        smtp_from_address: smtp.smtp_from_address ?? '',
+        smtp_from_name: smtp.smtp_from_name ?? '',
+    });
+    const test = useForm({ test_to: smtp.test_to ?? '' });
+    const d = form.data;
+
+    const status = smtp.in_use ? (
+        <Badge tone="green" dot>
+            In use
+        </Badge>
+    ) : smtp.smtp_enabled ? (
+        <Badge tone="yellow" dot>
+            Needs a successful test
+        </Badge>
+    ) : (
+        <Badge tone="gray" dot>
+            Off: platform mailer
+        </Badge>
+    );
+
+    return (
+        <div className="space-y-6">
+            <Section
+                title="Your SMTP server"
+                description="Send invoices and quotations to clients from your own email address and server."
+                form={form}
+                onSubmit={() => form.put(route('settings.email'), { preserveScroll: true, onSuccess: () => form.setData('smtp_password', '') })}
+            >
+                <div className="flex justify-end">{status}</div>
+                {smtp.smtp_last_error ? (
+                    <div className="flex gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+                        <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                        <span>
+                            <strong className="font-semibold">Last send failed{smtp.last_error_at ? ` (${formatDateTime(smtp.last_error_at)})` : ''}:</strong> {smtp.smtp_last_error}
+                            {smtp.in_use ? ' That email was delivered through the platform mailer instead.' : ''}
+                        </span>
+                    </div>
+                ) : null}
+                <Switch
+                    label="Use my SMTP server for client emails"
+                    description="Used only after a test email succeeds. If your server fails, emails go out from the platform address instead, with replies going to your company email."
+                    checked={d.smtp_enabled}
+                    onChange={(v) => form.setData('smtp_enabled', v)}
+                />
+                <div className="grid gap-4 sm:grid-cols-3">
+                    <Field form={form} name="smtp_host" label="SMTP host" placeholder="smtp.yourprovider.com" className="sm:col-span-2" />
+                    <Field form={form} name="smtp_port" label="Port" type="number" min="1" max="65535" />
+                    <FormField label="Encryption" error={form.errors.smtp_encryption} className="sm:col-span-3">
+                        <Select {...bind(form, 'smtp_encryption')} options={ENCRYPTIONS} />
+                    </FormField>
+                    <Field form={form} name="smtp_username" label="Username" autoComplete="off" />
+                    <Field
+                        form={form}
+                        name="smtp_password"
+                        label="Password"
+                        type="password"
+                        autoComplete="new-password"
+                        className="sm:col-span-2"
+                        placeholder={smtp.has_password ? '•••••••• (saved)' : ''}
+                        hint={smtp.has_password ? 'Leave blank to keep the saved password. Stored encrypted.' : 'Stored encrypted.'}
+                    />
+                    <Field form={form} name="smtp_from_address" label="From address" type="email" placeholder="billing@yourcompany.com" className="sm:col-span-2" />
+                    <Field form={form} name="smtp_from_name" label="From name" placeholder="Your Company" />
+                </div>
+            </Section>
+
+            <form
+                onSubmit={(e) => {
+                    e.preventDefault();
+                    test.post(route('settings.email.test'), { preserveScroll: true });
+                }}
+                noValidate
+            >
+                <Card>
+                    <CardHeader
+                        title="Send a test email"
+                        description={smtp.verified_at ? `Last successful test: ${formatDateTime(smtp.verified_at)}.` : 'Uses your saved settings, so save any changes first.'}
+                    />
+                    <CardBody>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                            <Field form={test} name="test_to" label="Send to" type="email" className="flex-1" />
+                            <Button type="submit" variant="secondary" icon={Send} loading={test.processing} disabled={!smtp.smtp_host || form.isDirty} className="sm:mt-7">
+                                Send test email
+                            </Button>
+                        </div>
+                    </CardBody>
+                </Card>
+            </form>
+        </div>
     );
 }

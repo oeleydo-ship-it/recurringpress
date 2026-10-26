@@ -86,6 +86,10 @@ Route::post('/quotation/{token}/reject', [PublicQuotationController::class, 'rej
 Route::post('/quotation/{token}/payment', [PublicQuotationController::class, 'selectPayment'])->name('quotations.public.payment');
 Route::post('/quotation/{token}/stripe/intent', [PublicQuotationController::class, 'createStripeIntent'])->middleware('throttle:public-actions')->name('quotations.public.stripe.intent');
 Route::get('/quotation/{token}/stripe/success', [PublicQuotationController::class, 'stripeSuccess'])->name('quotations.public.stripe.success');
+// On-demand TLS "ask" endpoint for the reverse proxy (see INSTALL.md, "Custom domains").
+Route::get('/tls/allowed', \App\Http\Controllers\CustomDomainTlsController::class)
+    ->middleware('throttle:120,1')
+    ->name('custom-domains.tls');
 Route::post('/stripe/webhook', [PaymentController::class, 'handleWebhook'])
     ->middleware('throttle:60,1')
     ->name('stripe.webhook');
@@ -210,6 +214,11 @@ Route::middleware(['auth', 'tenant', 'verified', \App\Http\Middleware\CheckOnboa
         Route::put('/settings/notes-terms', [SettingsController::class, 'updateNotesTerms'])->name('settings.notes-terms');
         Route::get('/settings/template-preview/{template}', [SettingsController::class, 'previewTemplate'])->name('settings.template.preview');
         Route::put('/settings/stripe', [SettingsController::class, 'updateStripe'])->name('settings.stripe');
+        Route::put('/settings/domain', [SettingsController::class, 'updateDomain'])->name('settings.domain');
+        Route::post('/settings/domain/verify', [SettingsController::class, 'verifyDomain'])->middleware('throttle:10,1')->name('settings.domain.verify');
+        Route::delete('/settings/domain', [SettingsController::class, 'removeDomain'])->name('settings.domain.remove');
+        Route::put('/settings/email', [SettingsController::class, 'updateEmail'])->name('settings.email');
+        Route::post('/settings/email/test', [SettingsController::class, 'testEmail'])->middleware('throttle:6,1')->name('settings.email.test');
     });
 });
 
