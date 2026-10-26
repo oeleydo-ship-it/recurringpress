@@ -1,7 +1,8 @@
 import { Link, router, useForm, usePage } from '@inertiajs/react';
-import { Banknote, Check, CheckCircle2, Copy, Download, ExternalLink, Link2, Mail, Pencil, Receipt, Repeat, Send, Trash2 } from 'lucide-react';
+import { Banknote, Check, CheckCircle2, Copy, Download, ExternalLink, Link2, Mail, Pencil, Receipt, Repeat, Send, Sparkles, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import ReminderModal from '@/Components/ai/ReminderModal';
 import DocumentPreview from '@/Components/documents/DocumentPreview';
 import { Badge, Button, Card, CardHeader, Dropdown, FormField, Input, Modal, PageHeader, Select, StatusBadge, Textarea, useConfirm } from '@/Components/ui';
 import { route } from '@/lib/route';
@@ -13,6 +14,8 @@ export default function InvoiceShow({ invoice, payments, paymentMethods }) {
     const df = auth.company?.date_format;
     const confirm = useConfirm();
     const [payOpen, setPayOpen] = useState(false);
+    const [reminderOpen, setReminderOpen] = useState(false);
+    const canRemind = Boolean(auth.company?.ai) && invoice.balance > 0 && ['sent', 'viewed', 'partial', 'overdue'].includes(invoice.status);
     const money = (v) => formatMoney(v, currency);
     const paidPct = invoice.total > 0 ? Math.min(100, (invoice.paid_amount / invoice.total) * 100) : 0;
     const status = invoice.is_overdue && !['overdue', 'paid'].includes(invoice.status) ? 'overdue' : invoice.status;
@@ -73,6 +76,11 @@ export default function InvoiceShow({ invoice, payments, paymentMethods }) {
                         {canPay ? (
                             <Button icon={Banknote} onClick={() => setPayOpen(true)}>
                                 Record payment
+                            </Button>
+                        ) : null}
+                        {canRemind ? (
+                            <Button variant="secondary" icon={Sparkles} onClick={() => setReminderOpen(true)} disabled={!invoice.client?.email} title={!invoice.client?.email ? 'Client has no email address' : undefined}>
+                                AI reminder
                             </Button>
                         ) : null}
                         <Button variant="secondary" icon={Send} onClick={emailClient} disabled={!invoice.client?.email} title={!invoice.client?.email ? 'Client has no email address' : undefined}>
@@ -194,6 +202,7 @@ export default function InvoiceShow({ invoice, payments, paymentMethods }) {
                 </div>
             </div>
 
+            {canRemind ? <ReminderModal open={reminderOpen} onClose={() => setReminderOpen(false)} invoice={invoice} /> : null}
             <RecordPaymentModal open={payOpen} onClose={() => setPayOpen(false)} invoice={invoice} methods={paymentMethods} currency={currency} symbol={auth.company?.currency_symbol} />
         </>
     );

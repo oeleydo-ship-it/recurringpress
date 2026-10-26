@@ -122,6 +122,8 @@ class HandleInertiaRequests extends Middleware
                 'plan' => $company->subscriptionPlan?->name,
                 'show_payouts' => $settings && $settings->payment_gateway_mode !== 'own',
                 'date_format' => $settings->date_format ?? 'M d, Y',
+                // AI buttons are hidden unless the platform has AI switched on.
+                'ai' => \App\Services\Ai\AiClient::enabled() ? ['remaining' => \App\Services\Ai\AiClient::remaining($company)] : null,
             ] : null,
             'theme' => [
                 'primary' => $settings->primary_color ?? '#4f46e5',

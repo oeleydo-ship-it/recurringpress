@@ -30,7 +30,11 @@ class SendDocumentEmail implements ShouldQueue
 
     public bool $deleteWhenMissingModels = true;
 
-    public function __construct(public Invoice|Quotation $document, public ?string $recipient = null)
+    /**
+     * @param  array{subject: string, body: string}|null  $reminder  a payment reminder written
+     *         by the user (optionally AI-drafted) instead of the standard document email
+     */
+    public function __construct(public Invoice|Quotation $document, public ?string $recipient = null, public ?array $reminder = null)
     {
         $this->onQueue('mail');
     }
@@ -57,9 +61,12 @@ class SendDocumentEmail implements ShouldQueue
         $pdf = Pdf::loadView($view, [$var => $doc])->output();
 
         // Tenant's own SMTP when configured and tested; otherwise (or if it fails) the platform mailer.
-        $mailers->send($doc->company, "emails.{$var}", [$var => $doc], function ($message) use ($recipient, $label, $number, $doc, $pdf) {
+        $emailView = $this->reminder ? 'emails.reminder' : "emails.{$var}";
+        $subject = $this->reminder['subject'] ?? "{$label} {$number} from {$doc->company->name}";
+
+        $mailers->send($doc->company, $emailView, [$var => $doc, 'reminder' => $this->reminder], function ($message) use ($recipient, $label, $number, $pdf, $subject) {
             $message->to($recipient);
-            $message->subject("{$label} {$number} from {$doc->company->name}");
+            $message->subject($subject);
             $message->attachData($pdf, strtolower($label) . "-{$number}.pdf", ['mime' => 'application/pdf']);
         });
     }

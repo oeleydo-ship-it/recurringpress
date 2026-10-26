@@ -145,6 +145,12 @@ Route::middleware(['auth', 'tenant', 'verified', \App\Http\Middleware\CheckOnboa
     Route::post('/invoices/{invoice}/payment', [PaymentController::class, 'recordManualPayment'])->name('invoices.payment');
     Route::post('/invoices/{invoice}/stripe', [PaymentController::class, 'createPaymentIntent'])->name('invoices.stripe');
 
+    // AI features (JSON; monthly quota per company, see App\Services\Ai\AiClient)
+    Route::post('/ai/insights', [\App\Http\Controllers\AiController::class, 'insights'])->middleware('throttle:10,1')->name('ai.insights');
+    Route::post('/ai/line-items', [\App\Http\Controllers\AiController::class, 'lineItems'])->middleware('throttle:20,1')->name('ai.line-items');
+    Route::post('/invoices/{invoice}/reminder/draft', [\App\Http\Controllers\AiController::class, 'reminder'])->middleware('throttle:20,1')->name('invoices.reminder.draft');
+    Route::post('/invoices/{invoice}/reminder/send', [\App\Http\Controllers\AiController::class, 'sendReminder'])->middleware('throttle:10,1')->name('invoices.reminder.send');
+
     // Payments/Transactions
     Route::get('/payments', [PaymentController::class, 'index'])->name('payments.index');
     Route::get('/payments/{payment}', [PaymentController::class, 'show'])->name('payments.show');
@@ -256,7 +262,10 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
         Route::get('/settings/smtp', [SuperadminSettingsController::class, 'smtp'])->name('settings.smtp');
         Route::put('/settings/smtp', [SuperadminSettingsController::class, 'updateSmtp'])->name('settings.smtp.update');
         Route::post('/settings/smtp/test', [SuperadminSettingsController::class, 'sendTestEmail'])->name('settings.smtp.test');
-        Route::get('/settings/custom-domains', [SuperadminSettingsController::class, 'customDomains'])->name('settings.custom-domains');
+        Route::get('/settings/ai', [SuperadminSettingsController::class, 'ai'])->name('settings.ai');
+        Route::put('/settings/ai', [SuperadminSettingsController::class, 'updateAi'])->name('settings.ai.update');
+        Route::post('/settings/ai/test', [SuperadminSettingsController::class, 'testAi'])->middleware('throttle:10,1')->name('settings.ai.test');
+        Route::get('/settings/custom-domains',[SuperadminSettingsController::class, 'customDomains'])->name('settings.custom-domains');
         Route::put('/settings/custom-domains', [SuperadminSettingsController::class, 'updateCustomDomains'])->name('settings.custom-domains.update');
         Route::post('/settings/custom-domains/test', [SuperadminSettingsController::class, 'testCloudflare'])->middleware('throttle:10,1')->name('settings.custom-domains.test');
         Route::get('/settings/payouts', [SuperadminSettingsController::class, 'payouts'])->name('settings.payouts');

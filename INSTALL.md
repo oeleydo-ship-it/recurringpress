@@ -237,6 +237,31 @@ rotating the key makes saved passwords unreadable, and tenants must re-enter the
   25/465/587/2525 are allowed (SSRF protection; `TENANT_SMTP_BLOCK_PRIVATE`). Outbound connections to those
   ports must be allowed by the server's firewall and hosting provider.
 
+### 10. AI features (Claude)
+
+Configured in **Superadmin → AI (Claude)**: an Anthropic API key (stored encrypted with `APP_KEY`, never sent to
+browsers), the model (default Claude Opus 5.5; Sonnet 5.5 and Haiku 5.5 are cheaper), an on/off switch, and a
+monthly request quota per tenant. **Test AI connection** sends one tiny request. The same page shows this month's
+requests, tokens and estimated cost by feature and by tenant, plus recent failures.
+
+Tenant features (hidden while AI is off):
+
+* **AI business insights** (dashboard): Claude reviews receivables, overdue invoices, client payment habits,
+  recurring revenue, upcoming renewals and the last six months, then returns a summary, risks and prioritised
+  actions. The forecast and totals on the card are calculated by the app, not by the model. Results are cached
+  for a day; **Refresh** runs a new analysis.
+* **AI reminder** (overdue/unpaid invoice page): drafts a friendly, firm or final-notice reminder. The user edits it
+  and sends it through the tenant's mailer (their SMTP if set up), with the PDF and the view-and-pay link.
+* **Write with AI** (invoice/quotation editor): turns a short description into line items. Items that match the
+  tenant's products use the product's own price, unit and tax; other prices are marked as estimates.
+
+Data sent to Anthropic: invoice numbers, client names, amounts and dates for that one tenant, plus product names
+and prices for the line-item writer. Never client emails, addresses, phone numbers, tax IDs or bank details.
+Requests go through the official `anthropic-ai/sdk` package, so deploys must run `composer install`. Requests that
+the model declines are re-run on a fallback model by Anthropic's server-side fallback (not available for Haiku).
+Every request, including failures and refusals, is logged in `ai_usage_logs`; successful and refused requests count
+toward the quota.
+
 ***
 
 **Need Help?**

@@ -1,3 +1,4 @@
+import AiInsightsCard from '@/Components/ai/AiInsightsCard';
 import { Link, usePage } from '@inertiajs/react';
 import { AlertCircle, ArrowRight, Banknote, Clock, FilePlus2, FileText, Receipt, TrendingDown, Users, Wallet } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -17,7 +18,7 @@ const STATUS_COLORS = {
     refunded: '#a78bfa',
 };
 
-export default function Dashboard({ stats, chart, statusBreakdown, recentInvoices, overdueInvoices, usage, greeting }) {
+export default function Dashboard({ stats, chart, statusBreakdown, recentInvoices, overdueInvoices, usage, greeting, aiInsights }) {
     const { auth } = usePage().props;
     const currency = auth.company?.currency ?? 'USD';
     const dateFormat = auth.company?.date_format;
@@ -54,6 +55,8 @@ export default function Dashboard({ stats, chart, statusBreakdown, recentInvoice
                 />
                 <StatCard label="Expenses this month" value={money(stats.expenses_month)} icon={TrendingDown} tone="yellow" trend={stats.expenses_trend === null ? undefined : -stats.expenses_trend} hint="vs last month" href={route('expenses.index')} />
             </div>
+
+            {auth.company?.ai ? <AiInsightsCard initial={aiInsights} remaining={auth.company.ai.remaining} /> : null}
 
             <div className="mt-6 grid gap-6 xl:grid-cols-3">
                 <Card className="xl:col-span-2">

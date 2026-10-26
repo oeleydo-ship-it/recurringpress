@@ -69,6 +69,10 @@ class DashboardController extends Controller
                 ->orderBy('due_date')->take(5)->get()
                 ->map(fn (Invoice $i) => $this->invoiceRow($i)),
             'usage' => $this->usage($company),
+            // Last AI analysis (cached up to a day); a new one is generated on request.
+            'aiInsights' => \App\Services\Ai\AiClient::enabled()
+                ? AiController::withInvoiceLinks(\App\Services\Ai\AiFeatures::cachedInsights($company), $company)
+                : null,
             'greeting' => $this->greeting(),
         ]);
     }

@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Superadmin;
 
 use App\Http\Controllers\Controller;
 use App\Mail\TestMail;
+use App\Models\AiUsageLog;
 use App\Models\CompanySetting;
+use App\Services\Ai\AiClient;
 use App\Models\SystemSetting;
 use App\Services\CloudflareCustomHostnames;
 use App\Support\TenantDomain;
@@ -230,6 +232,85 @@ class SettingsController extends Controller
 
             return back()->with('error', 'Sending failed: ' . $e->getMessage());
         }
+    }
+
+    /* ------------------------------ AI (Claude) ------------------------------ */
+
+    public function ai()
+    {
+        $monthStart = now()->startOfMonth();
+        $logs = AiUsageLog::where('created_at', '>=', $monthStart);
+
+        return Inertia::render('Superadmin/Settings/Ai', [
+            'settings' => [
+                'ai_enabled' => $this->bool(SystemSetting::get('ai_enabled')),
+                'ai_model' => AiClient::model(),
+                'ai_monthly_quota' => AiClient::monthlyQuota(),
+            ],
+            'hasKey' => filled(AiClient::apiKey()),
+            'models' => AiClient::MODELS,
+            'usage' => [
+                'requests' => (clone $logs)->count(),
+                'errors' => (clone $logs)->where('status', 'error')->count(),
+                'input_tokens' => (int) (clone $logs)->sum('input_tokens'),
+                'output_tokens' => (int) (clone $logs)->sum('output_tokens'),
+                'cost_usd' => round((float) (clone $logs)->sum('cost_usd'), 2),
+                'by_feature' => (clone $logs)->selectRaw('feature, COUNT(*) requests, SUM(cost_usd) cost')->groupBy('feature')->get()
+                    ->map(fn ($r) => ['feature' => $r->feature, 'requests' => (int) $r->requests, 'cost_usd' => round((float) $r->cost, 2)]),
+                'top_companies' => (clone $logs)->whereNotNull('company_id')->with('company:id,name')
+                    ->selectRaw('company_id, COUNT(*) requests, SUM(cost_usd) cost')->groupBy('company_id')->orderByDesc('requests')->limit(10)->get()
+                    ->map(fn ($r) => ['company' => $r->company?->name ?? '#' . $r->company_id, 'requests' => (int) $r->requests, 'cost_usd' => round((float) $r->cost, 2)]),
+                'recent_errors' => AiUsageLog::where('status', '!=', 'ok')->latest('created_at')->limit(5)->get(['feature', 'status', 'error', 'created_at'])
+                    ->map(fn ($r) => ['feature' => $r->feature, 'status' => $r->status, 'error' => $r->error, 'at' => $r->created_at?->toIso8601String()]),
+            ],
+        ]);
+    }
+
+    public function updateAi(Request $request)
+    {
+        $validated = $request->validate([
+            'ai_enabled' => 'boolean',
+            'ai_model' => ['required', \Illuminate\Validation\Rule::in(array_keys(AiClient::MODELS))],
+            'ai_monthly_quota' => 'required|integer|min:0|max:100000',
+            'ai_api_key' => ['nullable', 'string', 'max:255', 'starts_with:sk-ant-'],
+        ], ['ai_api_key.starts_with' => 'Anthropic API keys start with sk-ant-.']);
+
+        if ($request->boolean('ai_enabled') && blank($validated['ai_api_key'] ?? null) && ! AiClient::apiKey()) {
+            throw ValidationException::withMessages(['ai_enabled' => 'Add an API key before switching AI on.']);
+        }
+
+        SystemSetting::setMany([
+            'ai_enabled' => $request->boolean('ai_enabled') ? '1' : '0',
+            'ai_model' => $validated['ai_model'],
+            'ai_monthly_quota' => (string) $validated['ai_monthly_quota'],
+        ]);
+
+        if (filled($validated['ai_api_key'] ?? null)) {
+            AiClient::storeApiKey(trim($validated['ai_api_key'])); // write-only
+        }
+
+        return back()->with('success', 'AI settings saved.');
+    }
+
+    public function testAi(AiClient $ai)
+    {
+        if (! AiClient::apiKey()) {
+            return back()->with('error', 'Save an API key first.');
+        }
+
+        try {
+            $model = $ai->ping();
+        } catch (\Anthropic\Core\Exceptions\AuthenticationException $e) {
+            return back()->with('error', 'The API key was rejected by Anthropic.');
+        } catch (\Anthropic\Core\Exceptions\NotFoundException $e) {
+            return back()->with('error', 'The selected model is not available for this API key.');
+        } catch (\Throwable $e) {
+            Log::warning('AI connection test failed', ['error' => $e->getMessage()]);
+
+            return back()->with('error', 'AI test failed: ' . mb_substr($e->getMessage(), 0, 200));
+        }
+
+        return back()->with('success', "Connected. {$model} answered.");
     }
 
     /* ------------------- Custom domains (Cloudflare for SaaS) ------------------- */

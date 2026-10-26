@@ -18,6 +18,12 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    // API key, model and quota are set in Superadmin → AI. The base URL is only for local
+    // testing against a fake API.
+    'anthropic' => [
+        'base_url' => env('AI_API_BASE_URL'),
+    ],
+
     'stripe' => [
         'key' => env('STRIPE_KEY'),
         'secret' => env('STRIPE_SECRET'),

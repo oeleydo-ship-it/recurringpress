@@ -1,6 +1,7 @@
 import { useForm, usePage } from '@inertiajs/react';
 import { Save, Send, UserPlus } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import LineItemWriter from '@/Components/ai/LineItemWriter';
 import LineItemsEditor from '@/Components/documents/LineItemsEditor';
 import QuickAddClient from '@/Components/documents/QuickAddClient';
 import TotalsPanel from '@/Components/documents/TotalsPanel';
@@ -102,7 +103,7 @@ export default function DocumentEditor({
                     </Card>
 
                     <Card>
-                        <CardHeader title="Line items" />
+                        <CardHeader title="Line items" actions={auth.company?.ai ? <LineItemWriter items={d.items} onChange={(items) => form.setData('items', items)} currency={currency} defaults={defaults} /> : null} />
                         <CardBody className="pt-1">
                             <LineItemsEditor items={d.items} onChange={(items) => form.setData('items', items)} products={products} units={units} currency={currency} symbol={symbol} errors={form.errors} defaults={defaults} />
                         </CardBody>
