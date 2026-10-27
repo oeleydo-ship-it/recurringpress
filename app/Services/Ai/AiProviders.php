@@ -20,6 +20,7 @@ class AiProviders
             'label' => 'Anthropic (Claude)',
             'console' => 'console.anthropic.com → API keys',
             'default_model' => 'claude-opus-5-5',
+            'models' => ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'],
             // USD per million tokens [input, output] for known Claude models.
             'prices' => [
                 'claude-opus-5-5' => [4.00, 20.00],
@@ -33,6 +34,7 @@ class AiProviders
             'base_url' => 'https://api.openai.com/v1',
             'json_mode' => 'schema', // Structured Outputs (json_schema, strict)
             'max_tokens_param' => 'max_completion_tokens',
+            'models' => ['gpt-5', 'gpt-5-mini', 'gpt-5-nano', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4o', 'gpt-4o-mini'],
         ],
         'deepseek' => [
             'label' => 'DeepSeek',
@@ -41,6 +43,7 @@ class AiProviders
             'json_mode' => 'object', // JSON mode; schema given in the prompt, checked locally
             'max_tokens_param' => 'max_tokens',
             'default_model' => 'deepseek-chat',
+            'models' => ['deepseek-chat', 'deepseek-reasoner'],
             'note' => 'Requests are processed by DeepSeek (China).',
         ],
         'kimi' => [
@@ -50,12 +53,10 @@ class AiProviders
             'base_url_cn' => 'https://api.moonshot.cn/v1',
             'json_mode' => 'object',
             'max_tokens_param' => 'max_tokens',
+            'models' => ['kimi-k2-turbo-preview', 'kimi-k2-0905-preview', 'kimi-k2-0711-preview', 'moonshot-v1-128k', 'moonshot-v1-32k', 'moonshot-v1-8k'],
             'note' => 'Requests are processed by Moonshot AI. Keys from platform.moonshot.cn need the China endpoint.',
         ],
     ];
-
-    /** Claude models offered in the model list even before "Load models" is used. */
-    public const ANTHROPIC_MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'];
 
     public static function exists(string $name): bool
     {

@@ -250,7 +250,8 @@ class SettingsController extends Controller
             // Keys are write-only: only whether one is saved (and still decryptable).
             'has_key' => filled(AiProviders::key($name)),
             'model' => AiProviders::model($name),
-            'suggested_models' => $name === 'anthropic' ? AiProviders::ANTHROPIC_MODELS : array_values(array_filter([$p['default_model'] ?? null])),
+            // Common model ids, offered in the picker before "Load" fetches the key's own list.
+            'suggested_models' => $p['models'] ?? [],
             'known_prices' => $name === 'anthropic',
             'price_in' => SystemSetting::get("ai_{$name}_price_in"),
             'price_out' => SystemSetting::get("ai_{$name}_price_out"),

@@ -6,6 +6,8 @@ import { postJson } from '@/lib/http';
 import { route } from '@/lib/route';
 import { formatDateTime } from '@/lib/utils';
 
+const CUSTOM = '__custom__';
+
 const FEATURES = { insights: 'Business insights', reminder: 'Reminder drafts', line_items: 'Line-item writer', connection_test: 'Connection tests' };
 
 export default function AiSettings({ settings, providers, usage }) {
@@ -122,18 +124,22 @@ export default function AiSettings({ settings, providers, usage }) {
 
 function ProviderCard({ provider: p, data, errors, isDefault, onChange, dirty, kimiRegion, onKimiRegion }) {
     const [models, setModels] = useState(p.suggested_models);
+    // A saved model that isn't in the suggestions starts in "custom" mode so it stays editable.
+    const [custom, setCustom] = useState(Boolean(data.model) && !p.suggested_models.includes(data.model));
     const [loadingModels, setLoadingModels] = useState(false);
     const [modelError, setModelError] = useState(null);
     const [testing, setTesting] = useState(false);
     const err = (f) => errors[`providers.${p.name}.${f}`];
-    const listId = `models-${p.name}`;
 
     const loadModels = async () => {
         setLoadingModels(true);
         setModelError(null);
         try {
             const res = await postJson(route('superadmin.settings.ai.models'), { provider: p.name });
-            setModels([...new Set([...res.models, ...p.suggested_models])]);
+            const all = [...new Set([...p.suggested_models, ...res.models])];
+            setModels(all);
+            // The typed model is now in the list: show it as a normal choice.
+            if (all.includes(data.model)) setCustom(false);
         } catch (ex) {
             setModelError(ex.message);
         } finally {
@@ -169,17 +175,25 @@ function ProviderCard({ provider: p, data, errors, isDefault, onChange, dirty, k
                     <FormField label="API key" error={err('key')} hint={p.has_key ? 'Saved (encrypted). Leave blank to keep it.' : 'Stored encrypted.'}>
                         <Input type="password" autoComplete="new-password" value={data.key} onChange={(ev) => onChange({ key: ev.target.value })} placeholder={p.has_key ? '•••••••• (saved)' : 'sk-…'} invalid={Boolean(err('key'))} />
                     </FormField>
-                    <FormField label="Model" error={err('model') ?? modelError} hint="Type a model id, or load the list your key can use.">
-                        <div className="flex gap-2">
-                            <Input list={listId} value={data.model} onChange={(ev) => onChange({ model: ev.target.value.trim() })} className="font-mono" placeholder="model id" invalid={Boolean(err('model'))} />
-                            <datalist id={listId}>
-                                {models.map((m) => (
-                                    <option key={m} value={m} />
-                                ))}
-                            </datalist>
-                            <Button variant="secondary" icon={List} onClick={loadModels} loading={loadingModels} disabled={!p.has_key} title={p.has_key ? 'Load models' : 'Save an API key first'}>
-                                <span className="sr-only sm:not-sr-only">Load</span>
-                            </Button>
+                    <FormField label="Model" error={err('model') ?? modelError} hint={p.has_key ? 'Pick a model, or click Load for the full list your key can use.' : 'Pick a model. After saving a key, Load shows the full list your key can use.'}>
+                        <div className="space-y-2">
+                            <div className="flex gap-2">
+                                <Select
+                                    className="font-mono"
+                                    value={custom ? CUSTOM : data.model}
+                                    onChange={(ev) => {
+                                        const v = ev.target.value;
+                                        setCustom(v === CUSTOM);
+                                        if (v !== CUSTOM) onChange({ model: v });
+                                    }}
+                                    options={{ '': 'Choose a model…', ...Object.fromEntries(models.map((m) => [m, m])), [CUSTOM]: 'Custom model id…' }}
+                                    invalid={Boolean(err('model'))}
+                                />
+                                <Button variant="secondary" icon={List} onClick={loadModels} loading={loadingModels} disabled={!p.has_key} title={p.has_key ? 'Load the models your key can use' : 'Save an API key first'}>
+                                    <span className="sr-only sm:not-sr-only">Load</span>
+                                </Button>
+                            </div>
+                            {custom ? <Input value={data.model} onChange={(ev) => onChange({ model: ev.target.value.trim() })} className="font-mono" placeholder="Type the model id" autoFocus invalid={Boolean(err('model'))} /> : null}
                         </div>
                     </FormField>
                     {p.name === 'kimi' ? (
