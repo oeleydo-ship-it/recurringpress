@@ -9,7 +9,7 @@ class AiUsageLog extends Model
 {
     public const UPDATED_AT = null;
 
-    protected $fillable = ['company_id', 'user_id', 'feature', 'model', 'status', 'input_tokens', 'output_tokens', 'cost_usd', 'error'];
+    protected $fillable = ['company_id', 'user_id', 'feature', 'provider', 'model', 'status', 'input_tokens', 'output_tokens', 'cost_usd', 'error'];
 
     protected $casts = [
         'input_tokens' => 'integer',

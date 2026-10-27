@@ -7,6 +7,7 @@ use App\Mail\TestMail;
 use App\Models\AiUsageLog;
 use App\Models\CompanySetting;
 use App\Services\Ai\AiClient;
+use App\Services\Ai\AiProviders;
 use App\Models\SystemSetting;
 use App\Services\CloudflareCustomHostnames;
 use App\Support\TenantDomain;
@@ -234,83 +235,150 @@ class SettingsController extends Controller
         }
     }
 
-    /* ------------------------------ AI (Claude) ------------------------------ */
+    /* ------------------------------ AI providers ------------------------------ */
 
     public function ai()
     {
-        $monthStart = now()->startOfMonth();
-        $logs = AiUsageLog::where('created_at', '>=', $monthStart);
+        $logs = AiUsageLog::where('created_at', '>=', now()->startOfMonth());
+
+        $providers = collect(AiProviders::PROVIDERS)->map(fn ($p, $name) => [
+            'name' => $name,
+            'label' => $p['label'],
+            'console' => $p['console'],
+            'note' => $p['note'] ?? null,
+            'enabled' => AiProviders::isOn($name),
+            // Keys are write-only: only whether one is saved (and still decryptable).
+            'has_key' => filled(AiProviders::key($name)),
+            'model' => AiProviders::model($name),
+            'suggested_models' => $name === 'anthropic' ? AiProviders::ANTHROPIC_MODELS : array_values(array_filter([$p['default_model'] ?? null])),
+            'known_prices' => $name === 'anthropic',
+            'price_in' => SystemSetting::get("ai_{$name}_price_in"),
+            'price_out' => SystemSetting::get("ai_{$name}_price_out"),
+            'usable' => AiProviders::usable($name),
+        ])->values();
 
         return Inertia::render('Superadmin/Settings/Ai', [
             'settings' => [
                 'ai_enabled' => $this->bool(SystemSetting::get('ai_enabled')),
-                'ai_model' => AiClient::model(),
                 'ai_monthly_quota' => AiClient::monthlyQuota(),
+                'ai_default_provider' => AiProviders::defaultProvider(),
+                'ai_failover' => AiProviders::failover(),
+                'ai_provider_order' => AiProviders::order(),
+                'ai_kimi_region' => AiProviders::kimiRegion(),
             ],
-            'hasKey' => filled(AiClient::apiKey()),
-            'models' => AiClient::MODELS,
+            'providers' => $providers,
             'usage' => [
                 'requests' => (clone $logs)->count(),
                 'errors' => (clone $logs)->where('status', 'error')->count(),
                 'input_tokens' => (int) (clone $logs)->sum('input_tokens'),
                 'output_tokens' => (int) (clone $logs)->sum('output_tokens'),
                 'cost_usd' => round((float) (clone $logs)->sum('cost_usd'), 2),
+                'by_provider' => (clone $logs)->selectRaw("provider, COUNT(*) requests, SUM(status = 'error') errors, SUM(cost_usd) cost")->groupBy('provider')->get()
+                    ->map(fn ($r) => ['provider' => $r->provider, 'requests' => (int) $r->requests, 'errors' => (int) $r->errors, 'cost_usd' => round((float) $r->cost, 2)]),
                 'by_feature' => (clone $logs)->selectRaw('feature, COUNT(*) requests, SUM(cost_usd) cost')->groupBy('feature')->get()
                     ->map(fn ($r) => ['feature' => $r->feature, 'requests' => (int) $r->requests, 'cost_usd' => round((float) $r->cost, 2)]),
                 'top_companies' => (clone $logs)->whereNotNull('company_id')->with('company:id,name')
                     ->selectRaw('company_id, COUNT(*) requests, SUM(cost_usd) cost')->groupBy('company_id')->orderByDesc('requests')->limit(10)->get()
                     ->map(fn ($r) => ['company' => $r->company?->name ?? '#' . $r->company_id, 'requests' => (int) $r->requests, 'cost_usd' => round((float) $r->cost, 2)]),
-                'recent_errors' => AiUsageLog::where('status', '!=', 'ok')->latest('created_at')->limit(5)->get(['feature', 'status', 'error', 'created_at'])
-                    ->map(fn ($r) => ['feature' => $r->feature, 'status' => $r->status, 'error' => $r->error, 'at' => $r->created_at?->toIso8601String()]),
+                'recent_errors' => AiUsageLog::where('status', '!=', 'ok')->latest('created_at')->limit(5)->get(['feature', 'provider', 'status', 'error', 'created_at'])
+                    ->map(fn ($r) => ['feature' => $r->feature, 'provider' => $r->provider, 'status' => $r->status, 'error' => $r->error, 'at' => $r->created_at?->toIso8601String()]),
             ],
         ]);
     }
 
     public function updateAi(Request $request)
     {
+        $names = array_keys(AiProviders::PROVIDERS);
+
         $validated = $request->validate([
             'ai_enabled' => 'boolean',
-            'ai_model' => ['required', \Illuminate\Validation\Rule::in(array_keys(AiClient::MODELS))],
             'ai_monthly_quota' => 'required|integer|min:0|max:100000',
-            'ai_api_key' => ['nullable', 'string', 'max:255', 'starts_with:sk-ant-'],
-        ], ['ai_api_key.starts_with' => 'Anthropic API keys start with sk-ant-.']);
+            'ai_default_provider' => ['required', \Illuminate\Validation\Rule::in($names)],
+            'ai_failover' => 'boolean',
+            'ai_provider_order' => 'required|array',
+            'ai_provider_order.*' => [\Illuminate\Validation\Rule::in($names)],
+            'ai_kimi_region' => 'required|in:intl,cn',
+            'providers' => 'required|array',
+            'providers.*.enabled' => 'boolean',
+            'providers.*.key' => 'nullable|string|max:255',
+            'providers.*.model' => ['nullable', 'string', 'max:100', 'regex:/^[A-Za-z0-9._:\/-]+$/'],
+            'providers.*.price_in' => 'nullable|numeric|min:0|max:1000',
+            'providers.*.price_out' => 'nullable|numeric|min:0|max:1000',
+        ], ['providers.*.model.regex' => 'Model ids contain only letters, numbers and . _ : / -']);
 
-        if ($request->boolean('ai_enabled') && blank($validated['ai_api_key'] ?? null) && ! AiClient::apiKey()) {
-            throw ValidationException::withMessages(['ai_enabled' => 'Add an API key before switching AI on.']);
+        $input = collect($validated['providers'])->only($names);
+
+        if (filled($input['anthropic']['key'] ?? null) && ! str_starts_with(trim($input['anthropic']['key']), 'sk-ant-')) {
+            throw ValidationException::withMessages(['providers.anthropic.key' => 'Anthropic API keys start with sk-ant-.']);
+        }
+
+        // The default provider must be usable once AI is on.
+        $default = $validated['ai_default_provider'];
+        $d = $input[$default] ?? [];
+        if ($request->boolean('ai_enabled') && (! ($d['enabled'] ?? false) || blank($d['model'] ?? null) || (blank($d['key'] ?? null) && ! AiProviders::key($default)))) {
+            throw ValidationException::withMessages(['ai_default_provider' => 'Switch on the default provider and give it an API key and a model.']);
         }
 
         SystemSetting::setMany([
             'ai_enabled' => $request->boolean('ai_enabled') ? '1' : '0',
-            'ai_model' => $validated['ai_model'],
             'ai_monthly_quota' => (string) $validated['ai_monthly_quota'],
+            'ai_default_provider' => $default,
+            'ai_failover' => $request->boolean('ai_failover') ? '1' : '0',
+            'ai_provider_order' => implode(',', array_values(array_unique($validated['ai_provider_order']))),
+            'ai_kimi_region' => $validated['ai_kimi_region'],
         ]);
 
-        if (filled($validated['ai_api_key'] ?? null)) {
-            AiClient::storeApiKey(trim($validated['ai_api_key'])); // write-only
+        foreach ($input as $name => $p) {
+            SystemSetting::setMany([
+                "ai_{$name}_enabled" => ! empty($p['enabled']) ? '1' : '0',
+                "ai_{$name}_model" => filled($p['model'] ?? null) ? trim($p['model']) : null,
+                "ai_{$name}_price_in" => isset($p['price_in']) && $p['price_in'] !== '' ? (string) $p['price_in'] : null,
+                "ai_{$name}_price_out" => isset($p['price_out']) && $p['price_out'] !== '' ? (string) $p['price_out'] : null,
+            ]);
+
+            if (filled($p['key'] ?? null)) {
+                AiProviders::storeKey($name, trim($p['key'])); // write-only
+            }
         }
 
         return back()->with('success', 'AI settings saved.');
     }
 
-    public function testAi(AiClient $ai)
+    public function testAi(Request $request, AiClient $ai)
     {
-        if (! AiClient::apiKey()) {
-            return back()->with('error', 'Save an API key first.');
+        $name = (string) $request->input('provider');
+        abort_unless(AiProviders::exists($name), 404);
+
+        if (! AiProviders::key($name) || ! AiProviders::model($name)) {
+            return back()->with('error', 'Save an API key and a model for ' . AiProviders::PROVIDERS[$name]['label'] . ' first.');
         }
 
         try {
-            $model = $ai->ping();
-        } catch (\Anthropic\Core\Exceptions\AuthenticationException $e) {
-            return back()->with('error', 'The API key was rejected by Anthropic.');
-        } catch (\Anthropic\Core\Exceptions\NotFoundException $e) {
-            return back()->with('error', 'The selected model is not available for this API key.');
+            $model = $ai->ping($name);
         } catch (\Throwable $e) {
-            Log::warning('AI connection test failed', ['error' => $e->getMessage()]);
+            Log::warning('AI connection test failed', ['provider' => $name, 'error' => $e->getMessage()]);
 
-            return back()->with('error', 'AI test failed: ' . mb_substr($e->getMessage(), 0, 200));
+            return back()->with('error', AiProviders::PROVIDERS[$name]['label'] . ' test failed: ' . mb_substr($e->getMessage(), 0, 250));
         }
 
-        return back()->with('success', "Connected. {$model} answered.");
+        return back()->with('success', AiProviders::PROVIDERS[$name]['label'] . " connected. {$model} answered.");
+    }
+
+    /** Model ids the saved key can use, for the model picker (JSON). */
+    public function aiModels(Request $request)
+    {
+        $name = (string) $request->input('provider');
+        abort_unless(AiProviders::exists($name), 404);
+
+        if (! AiProviders::key($name)) {
+            return response()->json(['message' => 'Save an API key first.'], 422);
+        }
+
+        try {
+            return response()->json(['models' => AiProviders::make($name)->models()]);
+        } catch (\Throwable $e) {
+            return response()->json(['message' => 'Could not load models: ' . mb_substr($e->getMessage(), 0, 250)], 422);
+        }
     }
 
     /* ------------------- Custom domains (Cloudflare for SaaS) ------------------- */

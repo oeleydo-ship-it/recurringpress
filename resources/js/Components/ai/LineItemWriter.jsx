@@ -7,7 +7,7 @@ import { route } from '@/lib/route';
 import { formatMoney } from '@/lib/utils';
 
 /**
- * "Write with AI" for line items: describe the work, review Claude's suggestions, add them.
+ * "Write with AI" for line items: describe the work, review the suggestions, add them.
  * Catalog matches keep the product's own price; other prices are marked as estimates.
  */
 export default function LineItemWriter({ items, onChange, currency, defaults = {} }) {
@@ -54,7 +54,7 @@ export default function LineItemWriter({ items, onChange, currency, defaults = {
                 onClose={() => setOpen(false)}
                 size="lg"
                 title="Write line items with AI"
-                description="Describe the work or goods; Claude suggests line items, using your products where they fit."
+                description="Describe the work or goods; AI suggests line items, using your products where they fit."
                 footer={
                     <>
                         <Button variant="secondary" onClick={() => setOpen(false)}>

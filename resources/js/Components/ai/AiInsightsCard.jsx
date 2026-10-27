@@ -13,7 +13,7 @@ const HEALTH = {
 };
 const PRIORITY = { high: 'red', medium: 'yellow', low: 'gray' };
 
-/** Dashboard card: Claude's read of receivables, recurring revenue and cash flow. */
+/** Dashboard card: the AI's read of receivables, recurring revenue and cash flow. */
 export default function AiInsightsCard({ initial, remaining: initialRemaining }) {
     const [data, setData] = useState(initial);
     const [remaining, setRemaining] = useState(initialRemaining);
@@ -43,7 +43,7 @@ export default function AiInsightsCard({ initial, remaining: initialRemaining })
             <CardHeader
                 icon={Sparkles}
                 title="AI business insights"
-                description={data ? `Generated ${formatDateTime(data.generated_at)} · ${remaining} AI requests left this month` : 'Claude reviews your invoices, recurring revenue and cash flow, and suggests what to do next.'}
+                description={data ? `Generated ${formatDateTime(data.generated_at)} · ${remaining} AI requests left this month` : 'AI reviews your invoices, recurring revenue and cash flow, and suggests what to do next.'}
                 actions={
                     <Button variant={data ? 'secondary' : 'primary'} icon={data ? RefreshCw : Sparkles} loading={loading} onClick={analyse} disabled={remaining <= 0}>
                         {data ? 'Refresh' : 'Analyse my business'}

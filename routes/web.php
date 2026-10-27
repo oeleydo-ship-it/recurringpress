@@ -265,6 +265,7 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
         Route::get('/settings/ai', [SuperadminSettingsController::class, 'ai'])->name('settings.ai');
         Route::put('/settings/ai', [SuperadminSettingsController::class, 'updateAi'])->name('settings.ai.update');
         Route::post('/settings/ai/test', [SuperadminSettingsController::class, 'testAi'])->middleware('throttle:10,1')->name('settings.ai.test');
+        Route::post('/settings/ai/models', [SuperadminSettingsController::class, 'aiModels'])->middleware('throttle:20,1')->name('settings.ai.models');
         Route::get('/settings/custom-domains',[SuperadminSettingsController::class, 'customDomains'])->name('settings.custom-domains');
         Route::put('/settings/custom-domains', [SuperadminSettingsController::class, 'updateCustomDomains'])->name('settings.custom-domains.update');
         Route::post('/settings/custom-domains/test', [SuperadminSettingsController::class, 'testCloudflare'])->middleware('throttle:10,1')->name('settings.custom-domains.test');

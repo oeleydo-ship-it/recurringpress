@@ -237,30 +237,43 @@ rotating the key makes saved passwords unreadable, and tenants must re-enter the
   25/465/587/2525 are allowed (SSRF protection; `TENANT_SMTP_BLOCK_PRIVATE`). Outbound connections to those
   ports must be allowed by the server's firewall and hosting provider.
 
-### 10. AI features (Claude)
+### 10. AI features (Anthropic, OpenAI, DeepSeek, Kimi)
 
-Configured in **Superadmin → AI (Claude)**: an Anthropic API key (stored encrypted with `APP_KEY`, never sent to
-browsers), the model (default Claude Opus 5.5; Sonnet 5.5 and Haiku 5.5 are cheaper), an on/off switch, and a
-monthly request quota per tenant. **Test AI connection** sends one tiny request. The same page shows this month's
-requests, tokens and estimated cost by feature and by tenant, plus recent failures.
+Configured in **Superadmin → AI**:
+
+* **Providers:** Anthropic (Claude), OpenAI, DeepSeek and Kimi (Moonshot AI). Each has its own on/off switch, API
+  key (stored encrypted with `APP_KEY`, never sent to browsers), model and optional prices for the cost estimate.
+  Claude prices are built in. **Load** fills the model picker from the provider's own model list for that key.
+  **Test connection** sends one tiny request.
+* **Default provider**, tried first, and a **failover order**. If a provider is down, rate-limited, rejects the
+  key or returns unusable output, the request is retried on the next switched-on provider. A request a provider
+  declines for content reasons is never re-sent elsewhere. Failover can be switched off.
+* **Kimi endpoint:** international (`api.moonshot.ai`) or China (`api.moonshot.cn`). Keys only work on the platform
+  that issued them.
+* The AI on/off switch and the monthly request quota per tenant. Usage, cost by provider/feature/tenant and recent
+  failures are on the same page.
+
+How each provider returns structured answers: Claude and OpenAI enforce the feature's JSON schema. DeepSeek and
+Kimi use JSON mode with the schema in the prompt. Every answer is checked against the schema before use, and a
+failed check counts as a provider failure (so it fails over).
 
 Tenant features (hidden while AI is off):
 
-* **AI business insights** (dashboard): Claude reviews receivables, overdue invoices, client payment habits,
-  recurring revenue, upcoming renewals and the last six months, then returns a summary, risks and prioritised
-  actions. The forecast and totals on the card are calculated by the app, not by the model. Results are cached
-  for a day; **Refresh** runs a new analysis.
+* **AI business insights** (dashboard): reviews receivables, overdue invoices, client payment habits, recurring
+  revenue, upcoming renewals and the last six months, then returns a summary, risks and prioritised actions. The
+  forecast and totals on the card are calculated by the app, not by the model. Results are cached for a day;
+  **Refresh** runs a new analysis.
 * **AI reminder** (overdue/unpaid invoice page): drafts a friendly, firm or final-notice reminder. The user edits it
   and sends it through the tenant's mailer (their SMTP if set up), with the PDF and the view-and-pay link.
 * **Write with AI** (invoice/quotation editor): turns a short description into line items. Items that match the
   tenant's products use the product's own price, unit and tax; other prices are marked as estimates.
 
-Data sent to Anthropic: invoice numbers, client names, amounts and dates for that one tenant, plus product names
+Data sent to the provider: invoice numbers, client names, amounts and dates for that one tenant, plus product names
 and prices for the line-item writer. Never client emails, addresses, phone numbers, tax IDs or bank details.
-Requests go through the official `anthropic-ai/sdk` package, so deploys must run `composer install`. Requests that
-the model declines are re-run on a fallback model by Anthropic's server-side fallback (not available for Haiku).
-Every request, including failures and refusals, is logged in `ai_usage_logs`; successful and refused requests count
-toward the quota.
+DeepSeek and Moonshot AI process requests outside your own region (China-based companies): check your privacy
+policy and customer agreements before switching them on. Claude requests use the official `anthropic-ai/sdk`
+package, so deploys must run `composer install`. Every attempt, including failures and refusals, is logged in
+`ai_usage_logs` with its provider; only successful and refused requests count toward the quota.
 
 ***
 

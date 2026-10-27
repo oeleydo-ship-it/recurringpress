@@ -18,10 +18,13 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
-    // API key, model and quota are set in Superadmin → AI. The base URL is only for local
-    // testing against a fake API.
-    'anthropic' => [
-        'base_url' => env('AI_API_BASE_URL'),
+    // AI providers, keys, models and quota are set in Superadmin → AI. These base URLs are
+    // only for local testing against fake APIs.
+    'ai' => [
+        'anthropic_base_url' => env('AI_ANTHROPIC_BASE_URL'),
+        'openai_base_url' => env('AI_OPENAI_BASE_URL'),
+        'deepseek_base_url' => env('AI_DEEPSEEK_BASE_URL'),
+        'kimi_base_url' => env('AI_KIMI_BASE_URL'),
     ],
 
     'stripe' => [
