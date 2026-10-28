@@ -103,12 +103,12 @@ class CompanySetting extends Model
     /** A custom domain is only used for links once its DNS has been verified. */
     public function hasVerifiedCustomDomain(): bool
     {
-        return \App\Support\TenantDomain::enabled() && filled($this->custom_domain) && $this->custom_domain_verified_at !== null;
+        return \App\Support\TenantDomain::enabled() && $this->company?->canUseFeature('custom_domain') && filled($this->custom_domain) && $this->custom_domain_verified_at !== null;
     }
 
     public function hasActiveSubdomain(): bool
     {
-        return \App\Support\TenantDomain::subdomainsEnabled() && filled($this->subdomain);
+        return \App\Support\TenantDomain::subdomainsEnabled() && $this->company?->canUseFeature('subdomain') && filled($this->subdomain);
     }
 
     /** Client emails go through the tenant's SMTP only when it is switched on and a test send succeeded. */

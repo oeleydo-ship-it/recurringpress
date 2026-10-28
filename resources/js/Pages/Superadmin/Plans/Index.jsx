@@ -6,7 +6,7 @@ import { formatMoney } from '@/lib/utils';
 
 export default function SuperadminPlans({ plans }) {
     const confirm = useConfirm();
-    const limit = (v) => (v ? v : '∞');
+    const limit = (v) => (v != null ? v : '∞');
 
     const destroy = async (p) => {
         if (await confirm({ title: `Delete the ${p.name} plan?`, message: 'Plans with subscribed companies cannot be deleted.', confirmText: 'Delete plan' })) {
@@ -34,6 +34,7 @@ export default function SuperadminPlans({ plans }) {
                             <TH className="hidden md:table-cell" align="center">
                                 Invoices / Clients / Users
                             </TH>
+                            <TH align="right">Trial days</TH>
                             <TH align="right">Companies</TH>
                             <TH className="w-10" />
                         </THead>
@@ -59,6 +60,7 @@ export default function SuperadminPlans({ plans }) {
                                     <TD className="hidden md:table-cell" align="center">
                                         {limit(p.max_invoices)} / {limit(p.max_clients)} / {limit(p.max_users)}
                                     </TD>
+                                    <TD align="right">{p.price > 0 ? p.trial_days : 0}</TD>
                                     <TD align="right">{p.companies_count}</TD>
                                     <TD>
                                         <Dropdown

@@ -13,6 +13,7 @@ use Illuminate\Support\Str;
 class Invoice extends Model
 {
     use HasFactory;
+    use \App\Models\Concerns\EnforcesPlanQuota;
 
     protected $fillable = [
         'company_id',

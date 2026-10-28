@@ -13,12 +13,16 @@ class SubscriptionPlan extends Model
         'description',
         'price',
         'billing_cycle',
+        'trial_days',
         'max_invoices',
         'max_clients',
         'max_users',
         'max_products',
         'stripe_enabled',
         'custom_branding',
+        'white_label',
+        'custom_domain',
+        'subdomain',
         'api_access',
         'features',
         'is_active',
@@ -28,8 +32,12 @@ class SubscriptionPlan extends Model
 
     protected $casts = [
         'price' => 'decimal:2',
+        'trial_days' => 'integer',
         'stripe_enabled' => 'boolean',
         'custom_branding' => 'boolean',
+        'white_label' => 'boolean',
+        'custom_domain' => 'boolean',
+        'subdomain' => 'boolean',
         'api_access' => 'boolean',
         'features' => 'array',
         'is_active' => 'boolean',
@@ -60,6 +68,20 @@ class SubscriptionPlan extends Model
     public function companies()
     {
         return $this->hasMany(Company::class, 'subscription_plan_id');
+    }
+
+    public function initialSubscription(): array
+    {
+        if ($this->isFree()) {
+            return ['subscription_status' => 'active', 'subscription_ends_at' => null];
+        }
+
+        $days = max(0, (int) $this->trial_days);
+
+        return [
+            'subscription_status' => $days > 0 ? 'trial' : 'expired',
+            'subscription_ends_at' => now()->addDays($days),
+        ];
     }
 
     public function isFree(): bool

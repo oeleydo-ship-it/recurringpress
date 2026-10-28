@@ -18,13 +18,14 @@ class PublicDocument
 
         return [
             'name' => $company->name,
+            'white_label' => $company->canUseFeature('white_label'),
             'logo_url' => $company->logo_url,
             'email' => $company->email,
             'phone' => $company->phone,
             'website' => $company->website,
             'address' => collect([$company->address, $company->city, $company->state, $company->postal_code, $company->country])->filter()->implode(', '),
             'tax_number' => $company->tax_number,
-            'brand' => preg_match('/^#[0-9a-fA-F]{6}$/', (string) ($settings->primary_color ?? '')) ? $settings->primary_color : '#4f46e5',
+            'brand' => $company->canUseFeature('custom_branding') && preg_match('/^#[0-9a-fA-F]{6}$/', (string) ($settings->primary_color ?? '')) ? $settings->primary_color : '#4f46e5',
         ];
     }
 

@@ -43,7 +43,7 @@ class StripeGateway
     /** Whether card payments can be offered for this company right now. */
     public static function available(?CompanySetting $settings): bool
     {
-        if ($settings && ! ($settings->accept_stripe || $settings->stripe_enabled)) {
+        if ($settings && (! $settings->company?->canUseFeature('stripe') || ! ($settings->accept_stripe || $settings->stripe_enabled))) {
             return false;
         }
 

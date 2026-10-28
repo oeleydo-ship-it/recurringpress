@@ -396,14 +396,15 @@ function PlanStep({ plans, currentPlanId, currency }) {
                         </p>
                         <ul className="mt-4 flex-1 space-y-2 text-sm text-slate-600">
                             <li className="flex gap-2">
-                                <Check className="size-4 text-emerald-500" /> {p.max_invoices ? `${p.max_invoices} invoices / month` : 'Unlimited invoices'}
+                                <Check className="size-4 text-emerald-500" /> {p.max_invoices != null ? `${p.max_invoices} invoices` : 'Unlimited invoices'}
                             </li>
                             <li className="flex gap-2">
-                                <Check className="size-4 text-emerald-500" /> {p.max_clients ? `${p.max_clients} clients` : 'Unlimited clients'}
+                                <Check className="size-4 text-emerald-500" /> {p.max_clients != null ? `${p.max_clients} clients` : 'Unlimited clients'}
                             </li>
                             <li className="flex gap-2">
-                                <Check className="size-4 text-emerald-500" /> {p.max_users ? `${p.max_users} team members` : 'Unlimited team'}
+                                <Check className="size-4 text-emerald-500" /> {p.max_users != null ? `${p.max_users} team members` : 'Unlimited team'}
                             </li>
+                            {paid && p.trial_days > 0 ? <li className="flex gap-2"><Check className="size-4 text-emerald-500" /> {p.trial_days}-day trial for new accounts</li> : null}
                             {(p.features ?? []).slice(0, 3).map((f) => (
                                 <li key={f} className="flex gap-2">
                                     <Check className="size-4 text-emerald-500" /> {f}

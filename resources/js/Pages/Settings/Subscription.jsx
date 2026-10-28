@@ -4,7 +4,7 @@ import { Badge, Button, Card, PageHeader, useConfirm } from '@/Components/ui';
 import { route } from '@/lib/route';
 import { cn, formatDate, formatMoney } from '@/lib/utils';
 
-export default function Subscription({ currentPlanId, status, endsAt, plans, usage, canPayOnline }) {
+export default function Subscription({ currentPlanId, status, endsAt, plans, usage, canPayOnline, hasPlanAccess }) {
     const { auth } = usePage().props;
     const confirm = useConfirm();
     const current = plans.find((p) => p.id === currentPlanId);
@@ -23,8 +23,8 @@ export default function Subscription({ currentPlanId, status, endsAt, plans, usa
         <li className="flex items-center gap-2">
             <Check className="size-4 shrink-0 text-emerald-500" />
             <span>
-                {max ? `${max} ${label}` : `Unlimited ${label}`}
-                {used !== undefined && max ? <span className="text-slate-400"> · {used} used</span> : null}
+                {max != null ? `${max} ${label}` : `Unlimited ${label}`}
+                {used !== undefined && max != null ? <span className="text-slate-400"> · {used} used</span> : null}
             </span>
         </li>
     );
@@ -68,7 +68,7 @@ export default function Subscription({ currentPlanId, status, endsAt, plans, usa
                                 {limitRow('clients', usage.clients, p.max_clients)}
                                 {limitRow('team members', usage.users, p.max_users)}
                                 {limitRow('products', usage.products, p.max_products)}
-                                {[p.stripe_enabled && 'Online card payments', p.custom_branding && 'Custom branding', ...(p.features ?? [])].filter(Boolean).map((f) => (
+                                {[p.price > 0 && p.trial_days > 0 && `${p.trial_days}-day trial for new accounts`, p.stripe_enabled && 'Online card payments', p.custom_branding && 'Custom branding', p.white_label && 'White label', p.custom_domain && 'Custom domain', p.subdomain && 'Platform subdomain', ...(p.features ?? [])].filter(Boolean).map((f) => (
                                     <li key={f} className="flex items-center gap-2">
                                         <Check className="size-4 shrink-0 text-emerald-500" /> {f}
                                     </li>
@@ -77,10 +77,10 @@ export default function Subscription({ currentPlanId, status, endsAt, plans, usa
                             <Button
                                 className="mt-6 w-full"
                                 variant={isCurrent ? 'secondary' : p.is_popular ? 'primary' : 'secondary'}
-                                disabled={isCurrent || (p.price > 0 && !canPayOnline)}
+                                disabled={(isCurrent && hasPlanAccess) || (p.price > 0 && !canPayOnline)}
                                 onClick={() => choose(p)}
                             >
-                                {isCurrent ? 'Current plan' : p.price > 0 ? (canPayOnline ? `Upgrade to ${p.name}` : 'Contact support') : `Switch to ${p.name}`}
+                                {isCurrent && hasPlanAccess ? 'Current plan' : p.price > 0 ? (canPayOnline ? `Upgrade to ${p.name}` : 'Contact support') : `Switch to ${p.name}`}
                             </Button>
                         </Card>
                     );

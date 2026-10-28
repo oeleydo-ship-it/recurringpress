@@ -11,6 +11,7 @@ export default function PlanForm({ plan }) {
         description: plan?.description ?? '',
         price: plan?.price ?? 0,
         billing_cycle: plan?.billing_cycle ?? 'monthly',
+        trial_days: plan?.trial_days ?? 14,
         max_invoices: plan?.max_invoices ?? '',
         max_clients: plan?.max_clients ?? '',
         max_users: plan?.max_users ?? '',
@@ -18,6 +19,9 @@ export default function PlanForm({ plan }) {
         features: (plan?.features ?? []).join('\n'),
         stripe_enabled: plan?.stripe_enabled ?? true,
         custom_branding: plan?.custom_branding ?? false,
+        white_label: plan?.white_label ?? false,
+        custom_domain: plan?.custom_domain ?? false,
+        subdomain: plan?.subdomain ?? false,
         api_access: plan?.api_access ?? false,
         is_active: plan?.is_active ?? true,
         is_popular: plan?.is_popular ?? false,
@@ -27,7 +31,7 @@ export default function PlanForm({ plan }) {
     const e = form.errors;
     const num = (name, label, hint) => (
         <FormField label={label} error={e[name]} hint={hint}>
-            <Input type="number" min="1" value={d[name] ?? ''} onChange={(ev) => form.setData(name, ev.target.value)} placeholder="Unlimited" />
+            <Input type="number" min="0" value={d[name] ?? ''} onChange={(ev) => form.setData(name, ev.target.value)} placeholder="Unlimited" />
         </FormField>
     );
 
@@ -62,13 +66,16 @@ export default function PlanForm({ plan }) {
                             <FormField label="Billing cycle" error={e.billing_cycle}>
                                 <Select value={d.billing_cycle} onChange={(ev) => form.setData('billing_cycle', ev.target.value)} options={{ monthly: 'Monthly', yearly: 'Yearly' }} />
                             </FormField>
+                            <FormField label="Trial days" error={e.trial_days} hint="0 disables trials for paid plans. Free plans stay active without a trial.">
+                                <Input type="number" min="0" max="365" value={d.trial_days} onChange={(ev) => form.setData('trial_days', ev.target.value)} />
+                            </FormField>
                             <FormField label="Description" error={e.description} className="sm:col-span-2">
                                 <Textarea rows={2} value={d.description} onChange={(ev) => form.setData('description', ev.target.value)} />
                             </FormField>
                         </CardBody>
                     </Card>
                     <Card>
-                        <CardHeader title="Limits" description="Leave blank for unlimited." />
+                        <CardHeader title="Limits" description="Lifetime resource quotas. Leave blank for unlimited; use 0 to disable creation." />
                         <CardBody className="grid gap-4 sm:grid-cols-2">
                             {num('max_invoices', 'Invoices')}
                             {num('max_clients', 'Clients')}
@@ -90,6 +97,9 @@ export default function PlanForm({ plan }) {
                             <Switch label="Highlight as popular" checked={d.is_popular} onChange={(v) => form.setData('is_popular', v)} />
                             <Switch label="Online card payments" checked={d.stripe_enabled} onChange={(v) => form.setData('stripe_enabled', v)} />
                             <Switch label="Custom branding" checked={d.custom_branding} onChange={(v) => form.setData('custom_branding', v)} />
+                            <Switch label="White label (remove platform attribution)" checked={d.white_label} onChange={(v) => form.setData('white_label', v)} />
+                            <Switch label="Custom domain" checked={d.custom_domain} onChange={(v) => form.setData('custom_domain', v)} />
+                            <Switch label="Platform subdomain" checked={d.subdomain} onChange={(v) => form.setData('subdomain', v)} />
                             <Switch label="API access" checked={d.api_access} onChange={(v) => form.setData('api_access', v)} />
                             <FormField label="Sort order" error={e.order}>
                                 <Input type="number" min="0" value={d.order} onChange={(ev) => form.setData('order', ev.target.value)} />

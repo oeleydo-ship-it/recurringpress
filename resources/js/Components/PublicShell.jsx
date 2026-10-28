@@ -59,7 +59,7 @@ export default function PublicShell({ title, company, pdfUrl, children }) {
                             </a>
                         ) : null}
                     </div>
-                    <p className="text-xs">Powered by {site?.name ?? 'RecurringPress'}</p>
+                    {!company.white_label ? <p className="text-xs">Powered by {site?.name ?? 'RecurringPress'}</p> : null}
                 </div>
             </footer>
         </div>

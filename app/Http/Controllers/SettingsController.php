@@ -74,13 +74,15 @@ class SettingsController extends Controller
 
         return [
             'subdomain' => [
-                'enabled' => TenantDomain::subdomainsEnabled(),
+                'allowed' => $settings->company->canUseFeature('subdomain'),
+                'enabled' => TenantDomain::subdomainsEnabled() && $settings->company->canUseFeature('subdomain'),
                 'slug' => $settings->subdomain,
                 'base' => TenantDomain::subdomainBase(),
                 'url' => $settings->hasActiveSubdomain() ? TenantDomain::subdomainUrl($settings->subdomain) : null,
                 'in_use' => $settings->hasActiveSubdomain() && ! $settings->hasVerifiedCustomDomain(),
             ],
-            'enabled' => TenantDomain::enabled(),
+            'allowed' => $settings->company->canUseFeature('custom_domain'),
+            'enabled' => TenantDomain::enabled() && $settings->company->canUseFeature('custom_domain'),
             'domain' => $domain,
             'verified' => $settings->hasVerifiedCustomDomain(),
             'verified_at' => $settings->custom_domain_verified_at?->toIso8601String(),
@@ -98,6 +100,7 @@ class SettingsController extends Controller
     public function updateDomain(Request $request)
     {
         abort_unless(TenantDomain::enabled(), 404);
+        abort_unless(auth()->user()->company->canUseFeature('custom_domain'), 403, 'Your plan does not include custom domains.');
 
         $request->validate(['custom_domain' => 'required|string|max:253']);
 
@@ -134,6 +137,7 @@ class SettingsController extends Controller
     public function verifyDomain()
     {
         abort_unless(TenantDomain::enabled(), 404);
+        abort_unless(auth()->user()->company->canUseFeature('custom_domain'), 403, 'Your plan does not include custom domains.');
 
         $settings = $this->settings();
 
@@ -159,6 +163,7 @@ class SettingsController extends Controller
     public function updateSubdomain(Request $request)
     {
         abort_unless(TenantDomain::subdomainsEnabled(), 404);
+        abort_unless(auth()->user()->company->canUseFeature('subdomain'), 403, 'Your plan does not include subdomains.');
 
         $request->validate(['subdomain' => 'required|string|max:63']);
 
@@ -412,6 +417,7 @@ class SettingsController extends Controller
 
     public function updateTheme(Request $request)
     {
+        abort_unless(auth()->user()->company->canUseFeature('custom_branding'), 403, 'Your plan does not include custom branding.');
         $validated = $request->validate([
             // Hex only: these values are used in styles.
             'primary_color' => ['required', self::HEX],

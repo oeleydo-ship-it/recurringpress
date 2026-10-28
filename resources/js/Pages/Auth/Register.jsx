@@ -35,10 +35,10 @@ export default function Register({ plan, planSlug }) {
         <>
             <Head title="Create your account" />
             <AuthHeading
-                title={paid ? `Start your ${plan.name} trial` : 'Create your free account'}
+                title={paid ? (plan.trial_days > 0 ? `Start your ${plan.trial_days}-day ${plan.name} trial` : `Sign up for ${plan.name}`) : 'Create your free account'}
                 description={
                     <>
-                        {paid ? 'No credit card required. ' : ''}Already have an account?{' '}
+                        {paid && plan.trial_days > 0 ? 'No credit card required. ' : ''}Already have an account?{' '}
                         <Link href={route('login')} className="font-semibold text-indigo-600 hover:text-indigo-700">
                             Log in
                         </Link>

@@ -302,9 +302,16 @@ class Company extends Model
         return $this->subscription_status === 'trial';
     }
 
+    public function hasPlanAccess(): bool
+    {
+        return $this->is_active && $this->subscriptionPlan !== null
+            && in_array($this->subscription_status, ['active', 'trial'], true)
+            && ($this->subscription_ends_at === null || $this->subscription_ends_at->isFuture());
+    }
+
     public function canUseFeature(string $feature): bool
     {
-        if (!$this->subscriptionPlan) {
+        if (!$this->hasPlanAccess()) {
             return false;
         }
 
@@ -312,25 +319,26 @@ class Company extends Model
             'stripe' => $this->subscriptionPlan->stripe_enabled,
             'custom_branding' => $this->subscriptionPlan->custom_branding,
             'api_access' => $this->subscriptionPlan->api_access,
-            default => true,
+            'white_label', 'custom_domain', 'subdomain' => (bool) $this->subscriptionPlan->{$feature},
+            default => false,
         };
     }
 
     public function hasReachedLimit(string $resource): bool
     {
-        if (!$this->subscriptionPlan) {
+        if (!$this->hasPlanAccess()) {
             return true;
         }
 
         return match ($resource) {
             'invoices' => $this->subscriptionPlan->max_invoices !== null &&
-            $this->invoices()->count() >= $this->subscriptionPlan->max_invoices,
+            $this->invoices()->withoutGlobalScope('company')->count() >= $this->subscriptionPlan->max_invoices,
             'clients' => $this->subscriptionPlan->max_clients !== null &&
-            $this->clients()->count() >= $this->subscriptionPlan->max_clients,
+            $this->clients()->withoutGlobalScope('company')->count() >= $this->subscriptionPlan->max_clients,
             'users' => $this->subscriptionPlan->max_users !== null &&
-            $this->users()->count() >= $this->subscriptionPlan->max_users,
+            $this->users()->withoutGlobalScope('company')->count() >= $this->subscriptionPlan->max_users,
             'products' => $this->subscriptionPlan->max_products !== null &&
-            $this->products()->count() >= $this->subscriptionPlan->max_products,
+            $this->products()->withoutGlobalScope('company')->count() >= $this->subscriptionPlan->max_products,
             default => false,
         };
     }

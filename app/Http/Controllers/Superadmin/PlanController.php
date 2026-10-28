@@ -66,14 +66,18 @@ class PlanController extends Controller
             'description' => 'nullable|string|max:1000',
             'price' => 'required|numeric|min:0|max:100000',
             'billing_cycle' => 'required|in:monthly,yearly',
-            'max_invoices' => 'nullable|integer|min:1',
-            'max_clients' => 'nullable|integer|min:1',
-            'max_users' => 'nullable|integer|min:1',
-            'max_products' => 'nullable|integer|min:1',
+            'trial_days' => 'required|integer|min:0|max:365',
+            'max_invoices' => 'nullable|integer|min:0',
+            'max_clients' => 'nullable|integer|min:0',
+            'max_users' => 'nullable|integer|min:0',
+            'max_products' => 'nullable|integer|min:0',
             'features' => 'nullable|array|max:30',
             'features.*' => 'nullable|string|max:120',
             'stripe_enabled' => 'boolean',
             'custom_branding' => 'boolean',
+            'white_label' => 'boolean',
+            'custom_domain' => 'boolean',
+            'subdomain' => 'boolean',
             'api_access' => 'boolean',
             'is_active' => 'boolean',
             'is_popular' => 'boolean',
@@ -86,7 +90,7 @@ class PlanController extends Controller
         foreach (['max_invoices', 'max_clients', 'max_users', 'max_products'] as $limit) {
             $validated[$limit] = $validated[$limit] ?? null;
         }
-        foreach (['stripe_enabled', 'custom_branding', 'api_access', 'is_active', 'is_popular'] as $flag) {
+        foreach (['stripe_enabled', 'custom_branding', 'white_label', 'custom_domain', 'subdomain', 'api_access', 'is_active', 'is_popular'] as $flag) {
             $validated[$flag] = $request->boolean($flag);
         }
 
@@ -96,7 +100,7 @@ class PlanController extends Controller
     private function payload(SubscriptionPlan $p): array
     {
         return [
-            ...$p->only('id', 'name', 'slug', 'description', 'billing_cycle', 'max_invoices', 'max_clients', 'max_users', 'max_products', 'stripe_enabled', 'custom_branding', 'api_access', 'is_active', 'is_popular', 'order'),
+            ...$p->only('id', 'name', 'slug', 'description', 'billing_cycle', 'trial_days', 'max_invoices', 'max_clients', 'max_users', 'max_products', 'stripe_enabled', 'custom_branding', 'white_label', 'custom_domain', 'subdomain', 'api_access', 'is_active', 'is_popular', 'order'),
             'price' => (float) $p->price,
             'features' => $p->features ?? [],
         ];

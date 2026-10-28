@@ -29,9 +29,9 @@ export default function SubscriptionPayment({ plan, stripeKey, intentUrl, return
                         <p className="text-slate-500">Billed per {cycle}.</p>
                         <ul className="space-y-2 text-slate-600">
                             {[
-                                plan.max_invoices ? `${plan.max_invoices} invoices` : 'Unlimited invoices',
-                                plan.max_clients ? `${plan.max_clients} clients` : 'Unlimited clients',
-                                plan.max_users ? `${plan.max_users} team members` : 'Unlimited team',
+                                plan.max_invoices != null ? `${plan.max_invoices} invoices` : 'Unlimited invoices',
+                                plan.max_clients != null ? `${plan.max_clients} clients` : 'Unlimited clients',
+                                plan.max_users != null ? `${plan.max_users} team members` : 'Unlimited team',
                             ].map((t) => (
                                 <li key={t} className="flex items-center gap-2">
                                     <Check className="size-4 text-emerald-500" /> {t}

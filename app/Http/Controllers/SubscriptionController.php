@@ -28,6 +28,7 @@ class SubscriptionController extends Controller
         return Inertia::render('Settings/Subscription', [
             'currentPlanId' => $currentPlan?->id,
             'status' => $company->subscription_status,
+            'hasPlanAccess' => $company->hasPlanAccess(),
             'endsAt' => $company->subscription_ends_at?->toDateString(),
             'plans' => SubscriptionPlan::active()->ordered()->get()->map(fn ($p) => $this->planPayload($p)),
             'usage' => [
@@ -185,7 +186,7 @@ class SubscriptionController extends Controller
     private function planPayload(SubscriptionPlan $p): array
     {
         return [
-            ...$p->only('id', 'name', 'slug', 'description', 'billing_cycle', 'max_invoices', 'max_clients', 'max_users', 'max_products', 'custom_branding', 'stripe_enabled', 'is_popular'),
+            ...$p->only('id', 'name', 'slug', 'description', 'billing_cycle', 'trial_days', 'max_invoices', 'max_clients', 'max_users', 'max_products', 'custom_branding', 'white_label', 'custom_domain', 'subdomain', 'stripe_enabled', 'is_popular'),
             'price' => (float) $p->price,
             'features' => $p->features ?? [],
         ];

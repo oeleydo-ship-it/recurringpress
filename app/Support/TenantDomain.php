@@ -84,13 +84,15 @@ class TenantDomain
                 ->first();
 
             if ($settings) {
-                return $settings->company;
+                return $settings->hasVerifiedCustomDomain() ? $settings->company : null;
             }
         }
 
         $slug = self::subdomainSlugFromHost($host);
 
-        return $slug ? CompanySetting::where('subdomain', $slug)->first()?->company : null;
+        $settings = $slug ? CompanySetting::where('subdomain', $slug)->first() : null;
+
+        return $settings?->hasActiveSubdomain() ? $settings->company : null;
     }
 
     /* ------------------------- Platform subdomains ------------------------- */

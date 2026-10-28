@@ -526,13 +526,13 @@ function SubdomainCard({ subdomain }) {
     const form = useForm({ subdomain: subdomain.slug ?? '' });
 
     if (!subdomain.enabled) {
-        return null;
+        return <Card><CardHeader title="Subdomain" /><CardBody><p className="text-sm text-slate-500">{subdomain.allowed ? 'Subdomains are not enabled on this installation.' : 'Upgrade your plan to use a platform subdomain.'}</p></CardBody></Card>;
     }
 
     return (
         <Section
             title="Subdomain"
-            description={`A free address on ${subdomain.base} for your client-facing invoice and quotation pages. It works straight away, with no DNS setup.`}
+            description={`An address on ${subdomain.base} for your client-facing invoice and quotation pages. It works straight away, with no DNS setup.`}
             form={form}
             submitLabel={subdomain.slug ? 'Save subdomain' : 'Claim subdomain'}
             onSubmit={() => form.put(route('settings.subdomain'), { preserveScroll: true })}
@@ -608,7 +608,7 @@ function DomainTab({ domain }) {
             <Card>
                 <CardHeader title="Custom domain" description="Show invoice and quotation links on your own domain, e.g. billing.yourcompany.com." />
                 <CardBody>
-                    <p className="text-sm text-slate-500">Custom domains aren’t available on this installation yet. Your links use the platform address.</p>
+                    <p className="text-sm text-slate-500">{domain.allowed ? 'Custom domains are not enabled on this installation yet.' : 'Upgrade your plan to connect a custom domain.'} Your links use the platform address.</p>
                 </CardBody>
             </Card>
         );

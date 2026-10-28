@@ -224,6 +224,10 @@ class RecurringInvoice extends Model
         }
 
         $company = $this->company;
+        if ($company->hasReachedLimit('invoices')) {
+            return null;
+        }
+
         $invoiceNumber = $company->getNextInvoiceNumber();
 
         $invoice = Invoice::create([

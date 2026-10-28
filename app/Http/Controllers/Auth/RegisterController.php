@@ -19,10 +19,10 @@ class RegisterController extends Controller
     public function showRegistrationForm(Request $request)
     {
         $planSlug = $request->query('plan', 'free');
-        $plan = \App\Models\SubscriptionPlan::where('slug', $planSlug)->first();
+        $plan = \App\Models\SubscriptionPlan::active()->where('slug', $planSlug)->first();
 
         return Inertia::render('Auth/Register', [
-            'plan' => $plan?->only('name', 'slug', 'price'),
+            'plan' => $plan?->only('name', 'slug', 'price', 'trial_days'),
             'planSlug' => $plan?->slug ?? 'free',
         ]);
     }
@@ -59,11 +59,11 @@ class RegisterController extends Controller
 
         $user = DB::transaction(function () use ($request) {
             $planSlug = $request->input('plan', 'free');
-            $plan = \App\Models\SubscriptionPlan::where('slug', $planSlug)->first();
+            $plan = \App\Models\SubscriptionPlan::active()->where('slug', $planSlug)->first();
 
             // Fallback to free plan or first available plan if requested plan doesn't exist
             if (!$plan) {
-                $plan = \App\Models\SubscriptionPlan::where('slug', 'free')->first()
+                $plan = \App\Models\SubscriptionPlan::active()->where('slug', 'free')->first()
                     ?? \App\Models\SubscriptionPlan::where('is_active', true)->orderBy('order')->first();
             }
 
@@ -80,15 +80,7 @@ class RegisterController extends Controller
                 ]);
             }
 
-            $trialDays = 14;
-            $status = 'trial';
-            $endsAt = now()->addDays($trialDays);
-
-            // If it's a completely free plan (price 0), we might just make it active immediately
-            if ($plan->price <= 0) {
-                $status = 'active';
-                $endsAt = null; // Unlimited for free plan? Or maybe null means forever.
-            }
+            $subscription = $plan->initialSubscription();
 
             $company = Company::create([
                 'name' => $request->company_name,
@@ -98,9 +90,10 @@ class RegisterController extends Controller
                 'invoice_start_number' => 1,
                 'payment_terms' => 30,
                 'subscription_plan_id' => $plan->id,
-                'subscription_status' => $status,
+                // Bootstrap the owner within this transaction before applying a no-trial expiry.
+                'subscription_status' => 'active',
                 'subscription_started_at' => now(),
-                'subscription_ends_at' => $endsAt,
+                'subscription_ends_at' => null,
             ]);
 
             CompanySetting::create([
@@ -114,6 +107,8 @@ class RegisterController extends Controller
                 'company_id' => $company->id,
                 'role' => User::ROLE_OWNER,
             ]);
+
+            $company->update($subscription);
 
             return $user;
         });
@@ -136,6 +131,10 @@ class RegisterController extends Controller
                 \Illuminate\Support\Facades\Log::error('Failed to send verification email: ' . $e->getMessage());
                 // Continue anyway - user is registered, they can request resend later
             }
+        }
+
+        if (! $user->company->hasPlanAccess()) {
+            return redirect()->route('settings.subscription');
         }
 
         return redirect()->route('onboarding.welcome');

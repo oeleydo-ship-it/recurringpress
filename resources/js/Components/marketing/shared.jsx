@@ -146,11 +146,15 @@ export function PricingCards({ plans }) {
             {plans.map((p) => {
                 const popular = p.is_popular;
                 const limits = [
-                    p.max_invoices ? `${p.max_invoices} invoices` : 'Unlimited invoices',
-                    p.max_clients ? `${p.max_clients} clients` : 'Unlimited clients',
-                    p.max_users ? `${p.max_users} team member${p.max_users === 1 ? '' : 's'}` : 'Unlimited team members',
+                    p.max_invoices != null ? `${p.max_invoices} invoices` : 'Unlimited invoices',
+                    p.max_clients != null ? `${p.max_clients} clients` : 'Unlimited clients',
+                    p.max_users != null ? `${p.max_users} team member${p.max_users === 1 ? '' : 's'}` : 'Unlimited team members',
                     p.stripe_enabled && 'Online card payments',
+                    p.price > 0 && p.trial_days > 0 && `${p.trial_days}-day free trial`,
                     p.custom_branding && 'Custom branding',
+                    p.white_label && 'White label',
+                    p.custom_domain && 'Custom domain',
+                    p.subdomain && 'Platform subdomain',
                     ...(p.features ?? []),
                 ].filter(Boolean);
                 return (
@@ -175,7 +179,7 @@ export function PricingCards({ plans }) {
                             ))}
                         </ul>
                         <Button href={route('register', { plan: p.slug })} size="lg" className={cn('mt-8 w-full', popular ? 'bg-white text-slate-900 hover:bg-slate-100' : 'bg-indigo-600 text-white hover:bg-indigo-700')}>
-                            {p.price > 0 ? 'Start free trial' : 'Get started free'}
+                            {p.price > 0 ? (p.trial_days > 0 ? `Start ${p.trial_days}-day trial` : 'Get started') : 'Get started free'}
                         </Button>
                     </div>
                 );

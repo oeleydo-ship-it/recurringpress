@@ -136,6 +136,10 @@ class PublicQuotationController extends Controller
             return response()->json(['error' => 'Please accept the quotation first.'], 400);
         }
 
+        if ($quotation->company->hasReachedLimit('invoices')) {
+            return response()->json(['error' => 'The business cannot issue another invoice on its current plan. Please contact them before paying.'], 409);
+        }
+
         if (! StripeGateway::available($settings)) {
             return response()->json(['error' => 'Card payments are not available.'], 400);
         }

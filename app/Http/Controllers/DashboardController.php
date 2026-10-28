@@ -123,7 +123,7 @@ class DashboardController extends Controller
     {
         $plan = $company->subscriptionPlan ?? SubscriptionPlan::where('slug', 'free')->first();
         $make = function (int $used, $limit) {
-            $limit = $limit ? (int) $limit : null;
+            $limit = $limit !== null ? (int) $limit : null;
             return ['used' => $used, 'limit' => $limit, 'percent' => $limit ? min(100, round($used / $limit * 100)) : 0];
         };
 
