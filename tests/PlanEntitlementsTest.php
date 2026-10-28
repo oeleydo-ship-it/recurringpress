@@ -50,6 +50,8 @@ class PlanEntitlementsTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('company_id');
             $table->string('subdomain')->nullable();
+            $table->string('invoice_template')->default('classic');
+            $table->string('primary_color')->nullable();
             $table->timestamps();
         });
         Schema::create('invoices', function (Blueprint $table) {
@@ -160,6 +162,33 @@ class PlanEntitlementsTest extends TestCase
         self::assertSame(404, $middleware->handle(\Illuminate\Http\Request::create('https://acme.billing.test/', 'POST'), $next)->getStatusCode());
         $company->update(['subscription_ends_at' => now()->subDay()]);
         self::assertSame(404, $middleware->handle($request, $next)->getStatusCode());
+    }
+
+    public function test_invoice_design_can_be_saved_without_custom_branding_and_redirects_to_settings(): void
+    {
+        $company = $this->tenant(['custom_branding' => false]);
+        CompanySetting::create(['company_id' => $company->id]);
+        $user = new \App\Models\User;
+        $user->setRelation('company', $company);
+        auth()->setUser($user);
+        foreach (['uae', 'philippines', 'international', 'executive', 'commerce'] as $design) {
+            $request = \Illuminate\Http\Request::create('/settings/theme', 'PUT', ['invoice_template' => $design]);
+            $response = (new \App\Http\Controllers\SettingsController)->updateTheme($request);
+            self::assertSame(303, $response->getStatusCode());
+            self::assertStringEndsWith('/settings#appearance', $response->headers->get('Location'));
+            self::assertSame($design, $company->settings->fresh()->invoice_template);
+        }
+    }
+
+    public function test_branding_changes_still_require_the_plan_feature(): void
+    {
+        $company = $this->tenant(['custom_branding' => false]);
+        $user = new \App\Models\User;
+        $user->setRelation('company', $company);
+        auth()->setUser($user);
+        $request = \Illuminate\Http\Request::create('/settings/theme', 'PUT', ['invoice_template' => 'uae', 'primary_color' => '#112233']);
+        $this->expectException(ValidationException::class);
+        (new \App\Http\Controllers\SettingsController)->updateTheme($request);
     }
 
     public function test_saved_subdomain_stops_working_after_downgrade(): void

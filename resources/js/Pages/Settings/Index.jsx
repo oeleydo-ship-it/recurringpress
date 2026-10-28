@@ -380,7 +380,13 @@ function AppearanceTab({ settings, options }) {
     const applyPreset = (p) => form.setData((x) => ({ ...x, primary_color: p.primary, secondary_color: p.secondary, sidebar_color: p.sidebar, sidebar_text_color: p.sidebar_text }));
 
     return (
-        <Section title="Appearance" description="Your brand colours are used across the app and your client-facing pages." form={form} onSubmit={() => form.put(route('settings.theme'), { preserveScroll: true })}>
+        <Section title="Appearance" description="Your brand colours are used across the app and your client-facing pages." form={form} onSubmit={() => {
+            form.transform((data) => options.canCustomBranding ? data : { invoice_template: data.invoice_template });
+            form.post(route('settings.theme'), { preserveScroll: true });
+        }}>
+            <FieldError>{form.errors.appearance}</FieldError>
+            {!options.canCustomBranding ? <p className="text-sm text-slate-500">Choose any invoice design below. Custom brand colors and typography require a plan with custom branding.</p> : null}
+            <fieldset disabled={!options.canCustomBranding} className="space-y-5 disabled:opacity-60">
             <div>
                 <p className="mb-3 text-sm font-medium text-slate-700">Presets</p>
                 <div className="flex flex-wrap gap-3">
@@ -442,6 +448,8 @@ function AppearanceTab({ settings, options }) {
                 </FormField>
             </div>
 
+            </fieldset>
+            <FieldError>{form.errors.invoice_template}</FieldError>
             <div>
                 <p className="mb-3 text-sm font-medium text-slate-700">Invoice design</p>
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">

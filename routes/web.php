@@ -212,7 +212,8 @@ Route::middleware(['auth', 'tenant', 'verified', \App\Http\Middleware\CheckOnboa
         Route::put('/settings/quotation', [SettingsController::class, 'updateQuotation'])->name('settings.quotation');
         Route::put('/settings/preferences', [SettingsController::class, 'updatePreferences'])->name('settings.preferences');
         Route::put('/settings/payment', [SettingsController::class, 'updatePayment'])->name('settings.payment');
-        Route::put('/settings/theme', [SettingsController::class, 'updateTheme'])->name('settings.theme');
+        Route::get('/settings/theme', fn () => redirect()->to(route('settings.index') . '#appearance'))->name('settings.theme.edit');
+        Route::match(['put', 'post'], '/settings/theme', [SettingsController::class, 'updateTheme'])->name('settings.theme');
         Route::put('/settings/notes-terms', [SettingsController::class, 'updateNotesTerms'])->name('settings.notes-terms');
         Route::get('/settings/template-preview/{template}', [SettingsController::class, 'previewTemplate'])->name('settings.template.preview');
         Route::put('/settings/stripe', [SettingsController::class, 'updateStripe'])->name('settings.stripe');

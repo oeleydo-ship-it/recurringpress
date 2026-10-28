@@ -47,6 +47,7 @@ class SettingsController extends Controller
                 'has_webhook_secret' => filled($settings->stripe_webhook_secret),
             ],
             'options' => [
+                'canCustomBranding' => $company->canUseFeature('custom_branding'),
                 'currencies' => CompanySetting::currencies(),
                 'dateFormats' => CompanySetting::dateFormats(),
                 'invoiceTemplates' => CompanySetting::invoiceTemplates(),
@@ -417,23 +418,31 @@ class SettingsController extends Controller
 
     public function updateTheme(Request $request)
     {
-        abort_unless(auth()->user()->company->canUseFeature('custom_branding'), 403, 'Your plan does not include custom branding.');
+        $company = auth()->user()->company;
+        if (! $company->hasPlanAccess()) {
+            throw ValidationException::withMessages(['invoice_template' => 'Please renew your subscription to change your invoice design.']);
+        }
+
         $validated = $request->validate([
-            // Hex only: these values are used in styles.
-            'primary_color' => ['required', self::HEX],
-            'secondary_color' => ['required', self::HEX],
-            'sidebar_color' => ['required', self::HEX],
-            'sidebar_text_color' => ['required', self::HEX],
             'invoice_template' => ['required', Rule::in(array_keys(CompanySetting::invoiceTemplates()))],
-            'font_family' => ['required', Rule::in(array_keys(CompanySetting::fontFamilies()))],
-            'font_size' => ['required', Rule::in(array_keys(CompanySetting::fontSizes()))],
+            'primary_color' => ['sometimes', 'required', self::HEX],
+            'secondary_color' => ['sometimes', 'required', self::HEX],
+            'sidebar_color' => ['sometimes', 'required', self::HEX],
+            'sidebar_text_color' => ['sometimes', 'required', self::HEX],
+            'font_family' => ['sometimes', 'required', Rule::in(array_keys(CompanySetting::fontFamilies()))],
+            'font_size' => ['sometimes', 'required', Rule::in(array_keys(CompanySetting::fontSizes()))],
             'heading_color' => ['nullable', self::HEX],
             'text_color' => ['nullable', self::HEX],
         ]);
 
+        if (! $company->canUseFeature('custom_branding') && array_diff(array_keys($validated), ['invoice_template'])) {
+            throw ValidationException::withMessages(['appearance' => 'Your plan includes invoice designs. Upgrade your plan to change brand colors and typography.']);
+        }
+
         $this->settings()->update($validated);
 
-        return back()->with('success', 'Appearance saved.');
+        return redirect()->to(route('settings.index') . '#appearance', 303)
+            ->with('success', 'Invoice appearance saved.');
     }
 
     public function updateStripe(Request $request)
