@@ -3,12 +3,14 @@
 namespace App\Http\Middleware;
 
 use App\Support\TenantDomain;
+use App\Support\PublicDocument;
+use App\Models\SystemSetting;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Requests on a tenant's custom domain or platform subdomain may only reach that tenant's public invoice and
+ * Requests on a tenant's custom domain or platform subdomain may reach that tenant's home, public invoice and
  * quotation pages; everything else is sent to the platform. Unknown hosts get a bare 404
  * (no session, no branding, nothing about any tenant).
  *
@@ -29,6 +31,17 @@ class ResolveCustomDomain
 
         if (! $company) {
             return response('Not Found', 404, ['Content-Type' => 'text/plain']);
+        }
+
+        if ($request->path() === '/' && ($request->isMethod('GET') || $request->isMethod('HEAD'))) {
+            $request->attributes->set(TenantDomain::ATTRIBUTE, $company->id);
+
+            return response()->view('tenant.home', [
+                'company' => PublicDocument::company($company),
+                'loginUrl' => rtrim((string) config('app.url'), '/') . '/login',
+                'siteName' => SystemSetting::get('site_name', 'RecurringPress'),
+            ])->header('Cache-Control', 'no-store, private')
+                ->header('X-Robots-Tag', 'noindex, nofollow');
         }
 
         if (! $request->is('invoice/*', 'quotation/*')) {

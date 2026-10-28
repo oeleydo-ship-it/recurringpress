@@ -133,6 +133,35 @@ class PlanEntitlementsTest extends TestCase
         self::assertFalse($company->canUseFeature('custom_branding'));
     }
 
+    public function test_tenant_root_renders_home_while_documents_keep_their_tenant_binding(): void
+    {
+        \Illuminate\Support\Facades\Cache::put('system_setting_tenant_subdomains_enabled', '1');
+        \Illuminate\Support\Facades\Cache::put('system_setting_custom_domains_enabled', '0');
+        \Illuminate\Support\Facades\Cache::put('system_setting_site_name', 'Test Platform');
+        config(['app.url' => 'https://billing.test', 'tenancy.subdomains.base' => 'billing.test']);
+        $company = $this->tenant(['subdomain' => true, 'white_label' => true]);
+        $company->update(['name' => '<script>alert(1)</script>']);
+        CompanySetting::create(['company_id' => $company->id])->forceFill(['subdomain' => 'acme'])->save();
+        $middleware = new \App\Http\Middleware\ResolveCustomDomain;
+        $next = fn ($request) => response('next');
+        $request = \Illuminate\Http\Request::create('https://acme.billing.test/');
+        $home = $middleware->handle($request, $next);
+        self::assertSame(200, $home->getStatusCode());
+        self::assertStringContainsString('&lt;script&gt;', $home->getContent());
+        self::assertStringNotContainsString('<script>alert(1)</script>', $home->getContent());
+        self::assertStringContainsString('https://billing.test/login', $home->getContent());
+        self::assertStringNotContainsString('Powered by', $home->getContent());
+        self::assertStringContainsString('no-store', $home->headers->get('Cache-Control'));
+        $document = \Illuminate\Http\Request::create('https://acme.billing.test/invoice/token');
+        self::assertSame('next', $middleware->handle($document, $next)->getContent());
+        self::assertSame($company->id, $document->attributes->get(TenantDomain::ATTRIBUTE));
+        self::assertSame('next', $middleware->handle(\Illuminate\Http\Request::create('https://billing.test/'), $next)->getContent());
+        self::assertSame(404, $middleware->handle(\Illuminate\Http\Request::create('https://unknown.billing.test/'), $next)->getStatusCode());
+        self::assertSame(404, $middleware->handle(\Illuminate\Http\Request::create('https://acme.billing.test/', 'POST'), $next)->getStatusCode());
+        $company->update(['subscription_ends_at' => now()->subDay()]);
+        self::assertSame(404, $middleware->handle($request, $next)->getStatusCode());
+    }
+
     public function test_saved_subdomain_stops_working_after_downgrade(): void
     {
         \Illuminate\Support\Facades\Cache::put('system_setting_tenant_subdomains_enabled', '1');
