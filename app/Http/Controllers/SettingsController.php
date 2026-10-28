@@ -507,6 +507,13 @@ class SettingsController extends Controller
         ]);
         $company->setRelation('settings', $settings);
 
+        $sampleTaxRate = match ($template) { 'uae' => 5, 'philippines' => 12, default => 10 };
+        if ($template === 'uae') {
+            $company->forceFill(['name' => 'Acme Trading LLC', 'address' => 'Business Bay', 'city' => 'Dubai', 'state' => null, 'postal_code' => null, 'country' => 'United Arab Emirates', 'currency' => 'AED', 'tax_number' => '100000000000003', 'phone' => '+971 4 555 0100']);
+        } elseif ($template === 'philippines') {
+            $company->forceFill(['name' => 'Acme Services Inc.', 'address' => 'Ayala Avenue', 'city' => 'Makati', 'state' => 'Metro Manila', 'postal_code' => '1226', 'country' => 'Philippines', 'currency' => 'PHP', 'tax_number' => '000-000-000-00000', 'phone' => '+63 2 8555 0100']);
+        }
+
         $client = new Client();
         $client->forceFill([
             'client_type' => Client::TYPE_COMPANY,
@@ -521,11 +528,15 @@ class SettingsController extends Controller
             'email' => 'john@doe-enterprises.com',
         ]);
 
+        if (in_array($template, ['uae', 'philippines'], true)) {
+            $client->forceFill(['city' => $company->city, 'state' => $company->state, 'country' => $company->country, 'postal_code' => $company->postal_code, 'tax_number' => $template === 'uae' ? '100000000000004' : '000-000-000-00001']);
+        }
+
         $items = collect([
             ['name' => 'Web Development Services', 'description' => 'Frontend implementation of new dashboard', 'quantity' => 40, 'unit' => 'hrs', 'price' => 150.00, 'total' => 6000.00],
             ['name' => 'Hosting Setup', 'description' => 'Annual server configuration', 'quantity' => 1, 'unit' => 'yr', 'price' => 500.00, 'total' => 500.00],
             ['name' => 'Domain Registration', 'description' => 'Renewal of company domain', 'quantity' => 1, 'unit' => 'yr', 'price' => 50.00, 'total' => 50.00],
-        ])->map(fn ($attributes) => (new InvoiceItem())->forceFill($attributes));
+        ])->map(fn ($attributes) => (new InvoiceItem())->forceFill([...$attributes, 'tax_rate' => $sampleTaxRate]));
 
         $invoice = new Invoice();
         $invoice->forceFill([
@@ -537,10 +548,11 @@ class SettingsController extends Controller
             'notes' => 'Please pay within 14 days. Thank you for your continued business.',
             'terms' => 'Payment is due within 14 days.',
             'subtotal' => 6550.00,
-            'tax_amount' => 655.00, // 10%
+            'tax_amount' => 6550 * $sampleTaxRate / 100,
             'discount_amount' => 0,
             'discount_type' => 'fixed',
-            'total' => 7205.00,
+            'total' => 6550 * (1 + $sampleTaxRate / 100),
+            'paid_amount' => 0,
         ]);
         $invoice->setRelation('company', $company);
         $invoice->setRelation('client', $client);

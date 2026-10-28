@@ -132,6 +132,11 @@ class CompanySetting extends Model
             'striped' => ['name' => 'Striped', 'description' => 'Alternating rows theme', 'preview' => 'striped'],
             'tech' => ['name' => 'Tech', 'description' => 'Modern geometric style', 'preview' => 'tech'],
             'luxe' => ['name' => 'Luxe', 'description' => 'Premium & elegant', 'preview' => 'luxe'],
+            'uae' => ['name' => 'Gulf', 'description' => 'UAE-inspired emerald layout with TRN details', 'preview' => 'uae'],
+            'philippines' => ['name' => 'Manila', 'description' => 'Philippines-inspired navy ledger with TIN details', 'preview' => 'philippines'],
+            'international' => ['name' => 'International', 'description' => 'Clean charcoal design for cross-border billing', 'preview' => 'international'],
+            'executive' => ['name' => 'Executive', 'description' => 'Refined burgundy design for professional services', 'preview' => 'executive'],
+            'commerce' => ['name' => 'Commerce', 'description' => 'Structured teal design with detailed line-item taxes', 'preview' => 'commerce'],
         ];
     }
 
