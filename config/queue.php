@@ -36,6 +36,15 @@ return [
             'after_commit' => false,
         ],
 
+        'blog' => [
+            'driver' => 'redis',
+            'connection' => 'default',
+            'queue' => 'ai-blog',
+            'retry_after' => 960,
+            'block_for' => 5,
+            'after_commit' => true,
+        ],
+
         'redis' => [
             'driver' => 'redis',
             'connection' => 'default',

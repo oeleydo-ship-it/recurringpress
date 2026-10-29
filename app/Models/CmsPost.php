@@ -21,11 +21,14 @@ class CmsPost extends Model
         'meta_description',
         'author_id',
         'is_published',
+        'is_ai_generated',
+        'target_keyword',
         'published_at',
     ];
 
     protected $casts = [
         'is_published' => 'boolean',
+        'is_ai_generated' => 'boolean',
         'published_at' => 'datetime',
     ];
 

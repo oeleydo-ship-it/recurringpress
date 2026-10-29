@@ -7,6 +7,11 @@ import { route } from '@/lib/route';
 import { uploadMedia } from '@/lib/media';
 
 export default function PostForm({ post }) {
+    const localDate = (value) => {
+        if (!value) return '';
+        const date = new Date(value);
+        return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    };
     const editing = Boolean(post);
     const [preview, setPreview] = useState(post?.image ?? null);
     const form = useForm({
@@ -17,6 +22,7 @@ export default function PostForm({ post }) {
         meta_title: post?.meta_title ?? '',
         meta_description: post?.meta_description ?? '',
         is_published: post?.is_published ?? false,
+        published_at: post?.is_published ? '' : localDate(post?.published_at),
         featured_image: null,
         remove_image: false,
     });
@@ -25,8 +31,8 @@ export default function PostForm({ post }) {
 
     const submit = (ev) => {
         ev?.preventDefault();
+        form.transform((data) => ({ ...data, published_at: !data.is_published && data.published_at ? new Date(data.published_at).toISOString() : null, ...(editing ? { _method: 'put' } : {}) }));
         if (editing) {
-            form.transform((data) => ({ ...data, _method: 'put' }));
             form.post(route('superadmin.posts.update', post.id), { forceFormData: true, preserveScroll: true, onSuccess: () => form.setData('featured_image', null) });
         } else {
             form.post(route('superadmin.posts.store'), { forceFormData: true });
@@ -63,6 +69,9 @@ export default function PostForm({ post }) {
                         <CardHeader title="Publishing" />
                         <CardBody className="space-y-5">
                             <Switch label="Published" checked={d.is_published} onChange={(v) => form.setData('is_published', v)} />
+                            {!d.is_published && <FormField label="Schedule publication" error={e.published_at} hint="Your local time. Clear to keep this article as a draft.">
+                                <Input type="datetime-local" value={d.published_at} onChange={(ev) => form.setData('published_at', ev.target.value)} />
+                            </FormField>}
                             <FormField label="Slug" error={e.slug} hint="Leave blank to generate.">
                                 <Input prefix="/blog/" value={d.slug} onChange={(ev) => form.setData('slug', ev.target.value)} className="font-mono" />
                             </FormField>

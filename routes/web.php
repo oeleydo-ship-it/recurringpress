@@ -251,6 +251,10 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
         Route::put('/account', [SuperadminAccountController::class, 'update'])->middleware('throttle:6,1')->name('account.update');
         Route::put('/account/password', [SuperadminAccountController::class, 'updatePassword'])->middleware('throttle:6,1')->name('account.password');
         Route::resource('pages', SuperadminPageController::class)->except(['show']);
+        Route::put('/posts/ai-settings', [SuperadminPostController::class, 'updateAiSettings'])->name('posts.ai-settings');
+        Route::post('/posts/ai-generate', [SuperadminPostController::class, 'generateAiPost'])->name('posts.ai-generate');
+        Route::post('/posts/ai-run-scheduler', [SuperadminPostController::class, 'triggerSchedulerNow'])->name('posts.ai-run-scheduler');
+        Route::post('/posts/{post}/publish-now', [SuperadminPostController::class, 'publishNow'])->name('posts.publish-now');
         Route::resource('posts', SuperadminPostController::class)->except(['show']);
         Route::resource('plans', SuperadminPlanController::class)->except(['show']);
         Route::resource('users', SuperadminUserController::class)->except(['create', 'store']);

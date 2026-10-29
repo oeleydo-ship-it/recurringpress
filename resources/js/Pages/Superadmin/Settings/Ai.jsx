@@ -8,7 +8,7 @@ import { formatDateTime } from '@/lib/utils';
 
 const CUSTOM = '__custom__';
 
-const FEATURES = { insights: 'Business insights', reminder: 'Reminder drafts', line_items: 'Line-item writer', connection_test: 'Connection tests' };
+const FEATURES = { ai_blog_generator: 'Blog articles', insights: 'Business insights', reminder: 'Reminder drafts', line_items: 'Line-item writer', connection_test: 'Connection tests' };
 
 export default function AiSettings({ settings, providers, usage }) {
     const labels = Object.fromEntries(providers.map((p) => [p.name, p.label]));
@@ -31,7 +31,7 @@ export default function AiSettings({ settings, providers, usage }) {
 
     return (
         <>
-            <PageHeader title="AI" description="AI features for tenants: business insights, payment reminder drafts and the line-item writer." />
+            <PageHeader title="AI API configuration" description="Configure encrypted API keys, models and provider failover for blog generation and tenant AI features." actions={<Button href={route('superadmin.posts.index')} variant="secondary">Blog automation</Button>} />
             <form
                 onSubmit={(ev) => {
                     ev.preventDefault();

@@ -24,19 +24,20 @@ if (-not (Test-NetConnection -ComputerName 127.0.0.1 -Port 6379 -InformationLeve
     Write-Warning 'Redis is not listening on 127.0.0.1:6379 - start the Redis service first (cache, sessions and queues use it).'
 }
 
-Start-Process -FilePath $php -ArgumentList 'artisan', 'serve', '--host=127.0.0.1', '--port=8002' -WorkingDirectory $PSScriptRoot
-Start-Process -FilePath $php -ArgumentList 'artisan', 'queue:work', 'redis', '--queue=high,default,mail', '--tries=3', '--timeout=75', '--sleep=2' -WorkingDirectory $PSScriptRoot
-Start-Process -FilePath $php -ArgumentList 'artisan', 'schedule:work' -WorkingDirectory $PSScriptRoot
+Start-Process -FilePath $php -ArgumentList 'artisan', 'serve', '--host=127.0.0.1', '--port=8002' -WorkingDirectory $PSScriptRoot -WindowStyle Hidden
+Start-Process -FilePath $php -ArgumentList 'artisan', 'queue:work', 'redis', '--queue=high,default,mail', '--tries=3', '--timeout=75', '--sleep=2' -WorkingDirectory $PSScriptRoot -WindowStyle Hidden
+Start-Process -FilePath $php -ArgumentList 'artisan', 'queue:work', 'blog', '--queue=ai-blog', '--tries=2', '--timeout=900', '--sleep=3' -WorkingDirectory $PSScriptRoot -WindowStyle Hidden
+Start-Process -FilePath $php -ArgumentList 'artisan', 'schedule:work' -WorkingDirectory $PSScriptRoot -WindowStyle Hidden
 
 if ($Build) {
     # Production-like: compiled assets (public/build + bootstrap/ssr) and the Inertia SSR server.
     & npm.cmd run build
     if ($LASTEXITCODE -ne 0) { throw 'npm run build failed' }
     if (Test-Path 'public\hot') { Remove-Item 'public\hot' }
-    Start-Process -FilePath $php -ArgumentList 'artisan', 'inertia:start-ssr' -WorkingDirectory $PSScriptRoot
+    Start-Process -FilePath $php -ArgumentList 'artisan', 'inertia:start-ssr' -WorkingDirectory $PSScriptRoot -WindowStyle Hidden
 } else {
     # Hot reload; Laravel serves assets from the Vite dev server while public/hot exists.
-    Start-Process -FilePath 'npm.cmd' -ArgumentList 'run', 'dev' -WorkingDirectory $PSScriptRoot
+    Start-Process -FilePath 'npm.cmd' -ArgumentList 'run', 'dev' -WorkingDirectory $PSScriptRoot -WindowStyle Hidden
 }
 
 Write-Host 'App:     http://localhost:8002'

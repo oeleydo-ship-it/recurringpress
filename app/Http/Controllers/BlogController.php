@@ -10,7 +10,11 @@ class BlogController extends Controller
 {
     public function index()
     {
-        $posts = CmsPost::with('author:id,name')->where('is_published', true)
+        $posts = CmsPost::with('author:id,name')
+            ->where('is_published', true)
+            ->where(function ($q) {
+                $q->whereNull('published_at')->orWhere('published_at', '<=', now());
+            })
             ->orderBy('published_at', 'desc')
             ->paginate(9);
 
@@ -23,6 +27,9 @@ class BlogController extends Controller
     {
         $post = CmsPost::with('author:id,name')->where('slug', $slug)
             ->where('is_published', true)
+            ->where(function ($q) {
+                $q->whereNull('published_at')->orWhere('published_at', '<=', now());
+            })
             ->firstOrFail();
 
         return Inertia::render('Marketing/Blog/Show', [
@@ -34,7 +41,11 @@ class BlogController extends Controller
                 'meta_description' => $post->meta_description ?: $post->excerpt ?: Str::limit(trim(strip_tags((string) $post->content)), 160),
                 'updated_at' => $post->updated_at?->toIso8601String(),
             ],
-            'related' => CmsPost::where('is_published', true)->whereKeyNot($post->id)
+            'related' => CmsPost::where('is_published', true)
+                ->where(function ($q) {
+                    $q->whereNull('published_at')->orWhere('published_at', '<=', now());
+                })
+                ->whereKeyNot($post->id)
                 ->orderBy('published_at', 'desc')->take(3)->get()
                 ->map(fn (CmsPost $p) => $this->card($p)),
         ]);

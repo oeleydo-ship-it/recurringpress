@@ -199,6 +199,15 @@ return [
     */
 
     'defaults' => [
+        'supervisor-blog' => [
+            'connection' => 'blog',
+            'queue' => ['ai-blog'],
+            'balance' => 'simple',
+            'maxProcesses' => 1,
+            'tries' => 2,
+            'timeout' => 900,
+            'memory' => 256,
+        ],
         'supervisor-1' => [
             'connection' => 'redis',
             // Processed in priority order: high > default > mail.
@@ -217,7 +226,9 @@ return [
     ],
 
     'environments' => [
+        '*' => ['supervisor-blog' => ['maxProcesses' => 1]],
         'production' => [
+            'supervisor-blog' => ['maxProcesses' => 1],
             'supervisor-1' => [
                 'maxProcesses' => 10,
                 'balanceMaxShift' => 1,
@@ -226,6 +237,7 @@ return [
         ],
 
         'local' => [
+            'supervisor-blog' => ['maxProcesses' => 1],
             'supervisor-1' => [
                 'maxProcesses' => 3,
             ],
