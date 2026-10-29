@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Payment;
 use App\Models\Payout;
 use App\Models\SystemSetting;
+use App\Services\TenantNotifier;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -143,6 +144,15 @@ class PayoutController extends Controller
         if (is_string($result)) {
             return back()->with('error', $result);
         }
+
+        TenantNotifier::notify(
+            $company,
+            'payout_requested',
+            "Payout requested: {$result->payout_number}",
+            TenantNotifier::money($result->amount, $result->currency) . ' requested' . TenantNotifier::byActor() . '.',
+            TenantNotifier::path('payouts.show', $result->id),
+            TenantNotifier::AUDIENCE_ADMINS,
+        );
 
         return redirect()->route('payouts.show', $result)
             ->with('success', 'Payout requested. It is usually processed within 3–5 business days.');

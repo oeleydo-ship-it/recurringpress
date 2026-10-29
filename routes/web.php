@@ -23,6 +23,7 @@ use App\Http\Controllers\UpdateController;
 use App\Http\Controllers\AutoInstallController;
 use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\ExpenseController;
+use App\Http\Controllers\NotificationController;
 
 // Installation routes - using AutoInstallController for fresh installs
 Route::middleware(['not.installed', 'throttle:installer'])->prefix('install')->name('install.')->group(function () {
@@ -129,6 +130,13 @@ Route::middleware(['auth', 'verified'])->prefix('onboarding')->name('onboarding.
 
 Route::middleware(['auth', 'tenant', 'verified', \App\Http\Middleware\CheckOnboarding::class])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    // Top-bar notification bell (rows scoped to the signed-in user + company).
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::get('/notifications/recent', [NotificationController::class, 'recent'])->name('notifications.recent');
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');
+    Route::get('/notifications/{notification}/open', [NotificationController::class, 'open'])->whereNumber('notification')->name('notifications.open');
+    Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead'])->whereNumber('notification')->name('notifications.read');
 
     Route::resource('clients', ClientController::class);
     Route::resource('products', ProductController::class);

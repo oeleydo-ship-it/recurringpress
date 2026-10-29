@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Expense;
 use App\Models\Invoice;
+use App\Services\TenantNotifier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -83,10 +84,21 @@ class ExpenseController extends Controller
         $validated['is_reimbursed'] = $request->boolean('is_reimbursed');
         $validated['currency'] = auth()->user()->company->currency ?? 'USD';
 
-        DB::transaction(function () use (&$validated) {
+        $expense = DB::transaction(function () use (&$validated) {
             $validated['expense_number'] = $this->nextExpenseNumber();
-            Expense::create($validated);
+
+            return Expense::create($validated);
         });
+
+        TenantNotifier::notify(
+            $expense->company_id,
+            'expense_added',
+            "Expense added: {$expense->title}",
+            TenantNotifier::money($expense->amount, $expense->currency)
+                . ($expense->vendor ? " · {$expense->vendor}" : '')
+                . TenantNotifier::byActor() . '.',
+            TenantNotifier::path('expenses.show', $expense->id),
+        );
 
         return redirect()->route('expenses.index')->with('success', 'Expense recorded.');
     }

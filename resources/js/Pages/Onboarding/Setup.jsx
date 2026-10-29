@@ -98,7 +98,16 @@ function StepBody({ step, props, brand, setBrand, onBack, onNext }) {
     const { company, settings } = props;
     const initial = {
         1: { logo: null },
-        2: { address: company.address ?? '', city: company.city ?? '', state: company.state ?? '', postal_code: company.postal_code ?? '', country: company.country ?? '', phone: company.phone ?? '' },
+        2: {
+            address: company.address ?? '',
+            city: company.city ?? '',
+            state: company.state ?? '',
+            postal_code: company.postal_code ?? '',
+            country: company.country ?? '',
+            phone: company.phone ?? '',
+            // Registration stores USD; until this step is saved, suggest the visitor's local currency instead.
+            currency: company.currency_confirmed ? company.currency : guessCurrency(props.currencies),
+        },
         3: {
             accept_stripe: settings.accept_stripe,
             accept_bank_transfer: settings.accept_bank_transfer,
@@ -137,7 +146,7 @@ function StepBody({ step, props, brand, setBrand, onBack, onNext }) {
         <form onSubmit={save} noValidate>
             <div className="px-6 py-6 sm:px-8">
                 {step === 1 && <LogoStep form={form} company={company} />}
-                {step === 2 && <AddressStep form={form} />}
+                {step === 2 && <AddressStep form={form} currencies={props.currencies} />}
                 {step === 3 && <PaymentsStep form={form} settings={settings} />}
                 {step === 4 && <TaxStep form={form} />}
                 {step === 5 && <BrandStep form={form} props={props} brand={brand} setBrand={setBrand} />}
@@ -196,7 +205,25 @@ function LogoStep({ form, company }) {
     );
 }
 
-function AddressStep({ form }) {
+/** Currency from the browser's locale region (e.g. en-AE → AED) when it's in our list; else USD. */
+function guessCurrency(currencies = {}) {
+    try {
+        const code = REGION_CURRENCY[new Intl.Locale(navigator.language).maximize().region];
+        return code && currencies[code] ? code : 'USD';
+    } catch {
+        return 'USD';
+    }
+}
+
+// Common regions → currency (Intl has no region → currency lookup).
+const REGION_CURRENCY = {
+    AE: 'AED', SA: 'SAR', QA: 'QAR', KW: 'KWD', BH: 'BHD', OM: 'OMR', EG: 'EGP', GB: 'GBP', IE: 'EUR', DE: 'EUR', FR: 'EUR', ES: 'EUR', IT: 'EUR', NL: 'EUR',
+    BE: 'EUR', PT: 'EUR', AT: 'EUR', FI: 'EUR', GR: 'EUR', CA: 'CAD', AU: 'AUD', NZ: 'NZD', IN: 'INR', PK: 'PKR', PH: 'PHP', SG: 'SGD', MY: 'MYR', ID: 'IDR',
+    TH: 'THB', JP: 'JPY', CN: 'CNY', HK: 'HKD', KR: 'KRW', ZA: 'ZAR', NG: 'NGN', KE: 'KES', BR: 'BRL', MX: 'MXN', CH: 'CHF', SE: 'SEK', NO: 'NOK', DK: 'DKK',
+    PL: 'PLN', TR: 'TRY', US: 'USD',
+};
+
+function AddressStep({ form, currencies }) {
     const field = (name, label, props = {}) => (
         <FormField label={label} htmlFor={name} error={form.errors[name]} className={props.wide ? 'sm:col-span-2' : ''}>
             <Input id={name} value={form.data[name]} onChange={(e) => form.setData(name, e.target.value)} invalid={Boolean(form.errors[name])} autoComplete={props.autoComplete} />
@@ -209,7 +236,10 @@ function AddressStep({ form }) {
             {field('state', 'State / region', { autoComplete: 'address-level1' })}
             {field('postal_code', 'Postal code', { autoComplete: 'postal-code' })}
             {field('country', 'Country', { autoComplete: 'country-name' })}
-            {field('phone', 'Phone', { wide: true, autoComplete: 'tel' })}
+            {field('phone', 'Phone', { autoComplete: 'tel' })}
+            <FormField label="Currency" htmlFor="currency" error={form.errors.currency} hint="Used on invoices, quotations and reports. You can change it later in Settings.">
+                <Select id="currency" value={form.data.currency} onChange={(e) => form.setData('currency', e.target.value)} options={currencies} invalid={Boolean(form.errors.currency)} />
+            </FormField>
         </div>
     );
 }

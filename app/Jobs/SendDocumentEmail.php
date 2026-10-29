@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Invoice;
 use App\Models\Quotation;
 use App\Services\TenantMailer;
+use App\Services\TenantNotifier;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -69,6 +70,16 @@ class SendDocumentEmail implements ShouldQueue
             $message->subject($subject);
             $message->attachData($pdf, strtolower($label) . "-{$number}.pdf", ['mime' => 'application/pdf']);
         });
+
+        if ($isInvoice) {
+            TenantNotifier::notify(
+                $doc->company_id,
+                'invoice_sent',
+                ($this->reminder ? 'Payment reminder sent: ' : 'Invoice sent: ') . $number,
+                "Emailed to {$recipient}.",
+                TenantNotifier::path('invoices.show', $doc->id),
+            );
+        }
     }
 
     public function failed(Throwable $e): void

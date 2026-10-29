@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Mail\TeamInviteMail;
 use App\Models\User;
+use App\Services\TenantNotifier;
 use App\Support\PasswordResetLink;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -88,6 +89,15 @@ class UserController extends Controller
             Mail::to($user->email)->queue(new TeamInviteMail($user, $me->name, $company->name, PasswordResetLink::for($user)));
         }
 
+        TenantNotifier::notify(
+            $company,
+            'team_member_added',
+            "Team member added: {$user->name}",
+            $user->email . ' joined as ' . (User::roles()[$user->role] ?? $user->role) . TenantNotifier::byActor() . '.',
+            TenantNotifier::path('users.index'),
+            TenantNotifier::AUDIENCE_ADMINS,
+        );
+
         return redirect()->route('users.index')
             ->with('success', $invite ? "Invitation sent to {$user->email}." : 'Team member added.');
     }
@@ -151,6 +161,15 @@ class UserController extends Controller
         }
 
         $user->delete();
+
+        TenantNotifier::notify(
+            auth()->user()->company_id,
+            'team_member_removed',
+            "Team member removed: {$user->name}",
+            $user->email . ' was removed' . TenantNotifier::byActor() . '.',
+            TenantNotifier::path('users.index'),
+            TenantNotifier::AUDIENCE_ADMINS,
+        );
 
         return redirect()->route('users.index')->with('success', 'Team member removed.');
     }

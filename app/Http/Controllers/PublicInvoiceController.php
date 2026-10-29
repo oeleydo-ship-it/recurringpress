@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\CompanySetting;
 use App\Models\Invoice;
 use App\Services\StripeGateway;
+use App\Services\TenantNotifier;
 use App\Support\PublicDocument;
 use App\Support\TenantDomain;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -23,6 +24,19 @@ class PublicInvoiceController extends Controller
     {
         $invoice = $this->find($token);
         $settings = $invoice->company->settings;
+
+        // First open of the link by the client (not a team member previewing it): record it and let the team know.
+        if (! $invoice->viewed_at && auth()->user()?->company_id !== $invoice->company_id) {
+            $invoice->forceFill(['viewed_at' => now()])->save();
+            TenantNotifier::notify(
+                $invoice->company_id,
+                'invoice_viewed',
+                "Invoice viewed: {$invoice->invoice_number}",
+                ($invoice->client?->bill_to_name ?? 'Your client') . ' opened the invoice link.',
+                TenantNotifier::path('invoices.show', $invoice->id),
+            );
+        }
+
         $payable = ! in_array($invoice->status, [Invoice::STATUS_PAID, Invoice::STATUS_CANCELLED, Invoice::STATUS_REFUNDED], true)
             && $invoice->remaining_amount > 0;
 

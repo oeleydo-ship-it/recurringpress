@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Builder;
 use Carbon\Carbon;
 use App\Jobs\SendDocumentEmail;
+use App\Services\TenantNotifier;
 use Illuminate\Support\Facades\DB;
 
 class RecurringInvoice extends Model
@@ -212,6 +213,17 @@ class RecurringInvoice extends Model
                 SendDocumentEmail::dispatch($invoice);
                 $invoice->markAsSent();
             }
+        }
+
+        if ($invoice) {
+            TenantNotifier::notify(
+                $invoice->company_id,
+                'recurring_generated',
+                "Recurring invoice generated: {$invoice->invoice_number}",
+                "From schedule “{$this->name}” — " . TenantNotifier::money($invoice->total, $this->company?->currency)
+                    . ($this->auto_send ? ', emailed automatically.' : ', saved as a draft.'),
+                TenantNotifier::path('invoices.show', $invoice->id),
+            );
         }
 
         return $invoice;

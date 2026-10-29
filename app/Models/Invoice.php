@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Builder;
+use App\Services\TenantNotifier;
 use App\Support\TenantDomain;
 use Illuminate\Support\Str;
 
@@ -35,6 +36,7 @@ class Invoice extends Model
         'terms',
         'share_token',
         'sent_at',
+        'viewed_at',
         'paid_at',
     ];
 
@@ -42,6 +44,7 @@ class Invoice extends Model
         'issue_date' => 'date',
         'due_date' => 'date',
         'sent_at' => 'datetime',
+        'viewed_at' => 'datetime',
         'paid_at' => 'datetime',
         'subtotal' => 'decimal:2',
         'tax_amount' => 'decimal:2',
@@ -204,7 +207,27 @@ class Invoice extends Model
         } elseif ($this->isPartiallyPaid()) {
             $this->status = self::STATUS_PARTIAL;
         }
-        
+
         $this->save();
+
+        $this->notifyPaymentReceived($amount);
+    }
+
+    /** Bell notification for every payment path (manual, mark-paid, Stripe redirect and webhook). */
+    protected function notifyPaymentReceived(float $amount): void
+    {
+        $company = Company::find($this->company_id);
+        $client = Client::withoutGlobalScopes()->find($this->client_id);
+        $paid = $this->status === self::STATUS_PAID;
+
+        TenantNotifier::notify(
+            $this->company_id,
+            $paid ? 'invoice_paid' : 'payment_partial',
+            ($paid ? 'Invoice paid: ' : 'Partial payment: ') . $this->invoice_number,
+            'Received ' . TenantNotifier::money($amount, $company?->currency)
+                . ($client ? ' from ' . $client->bill_to_name : '')
+                . ($paid ? ' — paid in full.' : ' — ' . TenantNotifier::money($this->remaining_amount, $company?->currency) . ' still due.'),
+            TenantNotifier::path('invoices.show', $this->id),
+        );
     }
 }

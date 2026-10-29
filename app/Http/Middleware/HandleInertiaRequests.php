@@ -125,6 +125,10 @@ class HandleInertiaRequests extends Middleware
                 // AI buttons are hidden unless the platform has AI switched on.
                 'ai' => \App\Services\Ai\AiClient::enabled() ? ['remaining' => \App\Services\Ai\AiClient::remaining($company)] : null,
             ] : null,
+            // Bell badge; refreshed on every Inertia visit and by light polling in AppLayout.
+            'notifications' => $company ? [
+                'unread' => \App\Models\TenantNotification::forUser($user)->unread()->count(),
+            ] : null,
             'theme' => [
                 'primary' => $settings->primary_color ?? '#4f46e5',
                 'secondary' => $settings->secondary_color ?? '#6366f1',

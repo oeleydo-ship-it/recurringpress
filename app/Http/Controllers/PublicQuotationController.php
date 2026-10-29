@@ -5,11 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\Quotation;
 use App\Notifications\QuotationResponseNotification;
 use App\Services\StripeGateway;
+use App\Services\TenantNotifier;
 use App\Support\PublicDocument;
 use App\Support\TenantDomain;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Stripe\PaymentIntent;
 use Stripe\Stripe;
@@ -30,6 +32,16 @@ class PublicQuotationController extends Controller
                 'sent_at' => $quotation->sent_at ?? now(),
                 'status' => $quotation->status === Quotation::STATUS_DRAFT ? Quotation::STATUS_SENT : $quotation->status,
             ]);
+
+            if (auth()->user()?->company_id !== $quotation->company_id) {
+                TenantNotifier::notify(
+                    $quotation->company_id,
+                    'quotation_viewed',
+                    "Quotation viewed: {$quotation->quotation_number}",
+                    ($quotation->client?->bill_to_name ?? 'Your client') . ' opened the quotation link.',
+                    TenantNotifier::path('quotations.show', $quotation->id),
+                );
+            }
         }
 
         $settings = $quotation->company->settings;
@@ -229,6 +241,17 @@ class PublicQuotationController extends Controller
 
     protected function notifyCompany(Quotation $quotation, string $action): void
     {
+        $accepted = $action === 'accepted';
+        TenantNotifier::notify(
+            $quotation->company_id,
+            $accepted ? 'quotation_accepted' : 'quotation_declined',
+            ($accepted ? 'Quotation accepted: ' : 'Quotation declined: ') . $quotation->quotation_number,
+            ($quotation->client?->bill_to_name ?? 'Your client')
+                . ($accepted ? ' approved ' . TenantNotifier::money($quotation->total, $quotation->company->currency) . '.' : ' declined the quotation.')
+                . ($quotation->response_notes ? ' “' . Str::limit($quotation->response_notes, 120) . '”' : ''),
+            TenantNotifier::path('quotations.show', $quotation->id),
+        );
+
         foreach ($quotation->company->users as $user) {
             try {
                 $user->notify(new QuotationResponseNotification($quotation, $action));

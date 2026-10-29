@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class OnboardingController extends Controller
@@ -66,6 +67,7 @@ class OnboardingController extends Controller
                 'phone' => $company->phone,
                 'tax_number' => $company->tax_number,
                 'currency' => $company->currency,
+                'currency_confirmed' => (int) $company->onboarding_step >= 2,
             ],
             'settings' => [
                 'accept_bank_transfer' => (bool) $settings->accept_bank_transfer,
@@ -83,6 +85,7 @@ class OnboardingController extends Controller
                 'primary_color' => $settings->primary_color ?? '#4f46e5',
                 'invoice_template' => $settings->invoice_template ?? 'modern',
             ],
+            'currencies' => CompanySetting::currencies(),
             'invoiceTemplates' => CompanySetting::invoiceTemplates(),
             'colorPresets' => CompanySetting::colorPresets(),
             'plans' => SubscriptionPlan::active()->ordered()->get()
@@ -122,7 +125,7 @@ class OnboardingController extends Controller
                 }
                 break;
 
-            case 2: // Company address
+            case 2: // Company address + currency (same list and column as Settings → Company)
                 $company->update($request->validate([
                     'address' => 'nullable|string|max:500',
                     'city' => 'nullable|string|max:100',
@@ -130,6 +133,7 @@ class OnboardingController extends Controller
                     'postal_code' => 'nullable|string|max:20',
                     'country' => 'nullable|string|max:100',
                     'phone' => 'nullable|string|max:50',
+                    'currency' => ['required', Rule::in(array_keys(CompanySetting::currencies()))],
                 ]));
                 break;
 

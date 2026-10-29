@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\SubscriptionPlan;
 use App\Services\StripeGateway;
+use App\Services\TenantNotifier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
@@ -54,6 +55,8 @@ class SubscriptionController extends Controller
                 'subscription_status' => 'active',
                 'subscription_ends_at' => null,
             ]);
+
+            TenantNotifier::notify($company, 'plan_changed', "Plan changed to {$plan->name}", 'Switched' . TenantNotifier::byActor() . '.', TenantNotifier::path('settings.subscription'), TenantNotifier::AUDIENCE_ADMINS);
 
             return redirect()->route('settings.subscription')
                 ->with('success', 'Switched to the ' . $plan->name . ' plan.');
@@ -166,6 +169,15 @@ class SubscriptionController extends Controller
             'subscription_started_at' => now(),
             'subscription_ends_at' => $plan->billing_cycle === 'yearly' ? now()->addYearNoOverflow() : now()->addMonthNoOverflow(),
         ]);
+
+        TenantNotifier::notify(
+            $company,
+            'plan_changed',
+            "Subscribed to {$plan->name}",
+            'Payment received — renews on ' . $company->subscription_ends_at->format('M j, Y') . '.',
+            TenantNotifier::path('settings.subscription'),
+            TenantNotifier::AUDIENCE_ADMINS,
+        );
 
         return redirect()->route('settings.subscription')
             ->with('success', 'Payment received — you are now on the ' . $plan->name . ' plan.');

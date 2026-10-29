@@ -9,6 +9,7 @@ use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Services\CloudflareCustomHostnames;
 use App\Services\TenantMailer;
+use App\Services\TenantNotifier;
 use App\Support\TenantDomain;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -132,6 +133,8 @@ class SettingsController extends Controller
             throw ValidationException::withMessages(['custom_domain' => 'Could not register the domain: ' . $e->getMessage()]);
         }
 
+        $this->notifySettingsChanged('Custom domain added', $domain);
+
         return back()->with('success', 'Domain saved. Add the DNS records below, then click “Check status”.');
     }
 
@@ -147,14 +150,20 @@ class SettingsController extends Controller
         }
 
         // A manual check always reflects the current status (no grace period).
-        return TenantDomain::verify($settings, grace: false)
-            ? back()->with('success', $settings->custom_domain . ' is verified. New emails will link to it.')
-            : back()->with('error', 'Not verified yet: ' . $settings->custom_domain_error . ' DNS changes can take up to an hour to show up.');
+        if (TenantDomain::verify($settings, grace: false)) {
+            $this->notifySettingsChanged('Custom domain verified', $settings->custom_domain);
+
+            return back()->with('success', $settings->custom_domain . ' is verified. New emails will link to it.');
+        }
+
+        return back()->with('error', 'Not verified yet: ' . $settings->custom_domain_error . ' DNS changes can take up to an hour to show up.');
     }
 
     public function removeDomain()
     {
         TenantDomain::disconnect($this->settings());
+
+        $this->notifySettingsChanged('Custom domain removed');
 
         return back()->with('success', 'Custom domain removed. Links use the platform address again.');
     }
@@ -186,6 +195,8 @@ class SettingsController extends Controller
 
         $settings->forceFill(['subdomain' => $slug])->save();
 
+        $this->notifySettingsChanged('Subdomain set', TenantDomain::subdomainHost($slug));
+
         return back()->with('success', TenantDomain::subdomainHost($slug) . ' is ready.'
             . ($settings->hasVerifiedCustomDomain() ? ' Emails keep linking to your verified custom domain.' : ' New emails will link to it.'));
     }
@@ -193,6 +204,8 @@ class SettingsController extends Controller
     public function removeSubdomain()
     {
         $this->settings()->forceFill(['subdomain' => null])->save();
+
+        $this->notifySettingsChanged('Subdomain removed');
 
         return back()->with('success', 'Subdomain removed.');
     }
@@ -231,6 +244,8 @@ class SettingsController extends Controller
 
         $settings->save();
 
+        $this->notifySettingsChanged('Email (SMTP) settings');
+
         if ($settings->smtp_enabled && ! $settings->smtp_verified_at) {
             return back()->with('success', 'Saved. Send a test email to start using this server.');
         }
@@ -263,6 +278,8 @@ class SettingsController extends Controller
         }
 
         $settings->forceFill(['smtp_verified_at' => now(), 'smtp_last_error' => null, 'smtp_last_error_at' => null])->save();
+
+        $this->notifySettingsChanged('SMTP server verified', $settings->smtp_host);
 
         return back()->with('success', 'Test email sent to ' . $request->input('test_to') . '.'
             . ($settings->smtp_enabled ? ' Client emails now go through your server.' : ' Turn on “Use my SMTP server” to use it for client emails.'));
@@ -304,6 +321,8 @@ class SettingsController extends Controller
 
         $company->update($validated);
 
+        $this->notifySettingsChanged('Company details');
+
         return back()->with('success', 'Company details saved.');
     }
 
@@ -335,6 +354,8 @@ class SettingsController extends Controller
             'show_invoice_footer' => $request->boolean('show_invoice_footer'),
         ]);
 
+        $this->notifySettingsChanged('Invoice settings');
+
         return back()->with('success', 'Invoice settings saved.');
     }
 
@@ -359,6 +380,8 @@ class SettingsController extends Controller
             'show_quotation_message' => $request->boolean('show_quotation_message'),
         ]);
 
+        $this->notifySettingsChanged('Quotation settings');
+
         return back()->with('success', 'Quotation settings saved.');
     }
 
@@ -376,6 +399,8 @@ class SettingsController extends Controller
         ]);
 
         $this->settings()->update($validated);
+
+        $this->notifySettingsChanged('Preferences');
 
         return back()->with('success', 'Preferences saved.');
     }
@@ -413,6 +438,8 @@ class SettingsController extends Controller
 
         $this->settings()->update($validated);
 
+        $this->notifySettingsChanged('Payment settings');
+
         return back()->with('success', 'Payment settings saved.');
     }
 
@@ -441,6 +468,8 @@ class SettingsController extends Controller
 
         $this->settings()->update($validated);
 
+        $this->notifySettingsChanged('Appearance');
+
         return redirect()->to(route('settings.index') . '#appearance', 303)
             ->with('success', 'Invoice appearance saved.');
     }
@@ -462,6 +491,8 @@ class SettingsController extends Controller
 
         $this->settings()->update($validated);
 
+        $this->notifySettingsChanged('Stripe settings');
+
         return back()->with('success', 'Stripe settings saved.');
     }
 
@@ -472,7 +503,24 @@ class SettingsController extends Controller
             'default_terms' => 'nullable|string|max:5000',
         ]));
 
+        $this->notifySettingsChanged('Default notes & terms');
+
         return back()->with('success', 'Default notes & terms saved.');
+    }
+
+    /** Bell notification for the company's owners/admins: "Company details updated by Jane". */
+    private function notifySettingsChanged(string $what, ?string $detail = null): void
+    {
+        $verb = preg_match('/(added|removed|set|verified)$/', $what) ? '' : ' updated';
+
+        TenantNotifier::notify(
+            auth()->user()->company_id,
+            'settings_changed',
+            $what . $verb . ($detail ? ": {$detail}" : ''),
+            'Changed' . TenantNotifier::byActor() . '.',
+            TenantNotifier::path('settings.index'),
+            TenantNotifier::AUDIENCE_ADMINS,
+        );
     }
 
     private function settings(): CompanySetting

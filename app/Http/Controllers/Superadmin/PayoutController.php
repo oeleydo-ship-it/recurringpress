@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Superadmin;
 use App\Http\Controllers\Controller;
 use App\Models\Payment;
 use App\Models\Payout;
+use App\Services\TenantNotifier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -107,6 +108,7 @@ class PayoutController extends Controller
         }
 
         $payout->update(['status' => Payout::STATUS_PROCESSING]);
+        $this->notifyTenant($payout, 'payout_approved', "Payout approved: {$payout->payout_number}", 'It is being processed and should arrive within 3–5 business days.');
 
         return back()->with('success', 'Payout marked as processing.');
     }
@@ -131,6 +133,7 @@ class PayoutController extends Controller
             'processed_at' => now(),
             'processed_by' => Auth::guard('superadmin')->id(),
         ]);
+        $this->notifyTenant($payout, 'payout_paid', "Payout paid: {$payout->payout_number}", TenantNotifier::money($payout->amount, $payout->currency) . ' has been sent to you.');
 
         return redirect()->route('superadmin.payouts.index')->with('success', 'Payout completed.');
     }
@@ -156,8 +159,14 @@ class PayoutController extends Controller
                 'processed_by' => Auth::guard('superadmin')->id(),
             ]);
         });
+        $this->notifyTenant($payout, 'payout_rejected', "Payout rejected: {$payout->payout_number}", 'Reason: ' . $validated['admin_notes'] . ' The balance is available to request again.');
 
         return redirect()->route('superadmin.payouts.index')->with('success', 'Payout rejected and payments released.');
+    }
+
+    private function notifyTenant(Payout $payout, string $type, string $title, string $body): void
+    {
+        TenantNotifier::notify($payout->company_id, $type, $title, $body, TenantNotifier::path('payouts.show', $payout->id), TenantNotifier::AUDIENCE_ADMINS);
     }
 
     private function find($id): Payout
