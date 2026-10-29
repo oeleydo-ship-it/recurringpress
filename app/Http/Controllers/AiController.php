@@ -64,6 +64,17 @@ class AiController extends Controller
         return $this->run(fn () => $this->features->lineItems(auth()->user()->company, $request->input('description')));
     }
 
+    public function chat(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'messages' => 'required|array|min:1|max:20',
+            'messages.*.role' => ['required', Rule::in(['user', 'assistant'])],
+            'messages.*.content' => 'required|string|max:2000',
+        ]);
+
+        return $this->run(fn () => $this->features->chat(auth()->user()->company, $validated['messages']));
+    }
+
     private static function remindable(Invoice $invoice): bool
     {
         return in_array($invoice->status, ['sent', 'viewed', 'partial', 'overdue'], true)

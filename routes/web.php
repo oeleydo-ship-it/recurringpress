@@ -155,6 +155,7 @@ Route::middleware(['auth', 'tenant', 'verified', \App\Http\Middleware\CheckOnboa
 
     // AI features (JSON; monthly quota per company, see App\Services\Ai\AiClient)
     Route::post('/ai/insights', [\App\Http\Controllers\AiController::class, 'insights'])->middleware('throttle:10,1')->name('ai.insights');
+    Route::post('/ai/chat', [\App\Http\Controllers\AiController::class, 'chat'])->middleware('throttle:20,1')->name('ai.chat');
     Route::post('/ai/line-items', [\App\Http\Controllers\AiController::class, 'lineItems'])->middleware('throttle:20,1')->name('ai.line-items');
     Route::post('/invoices/{invoice}/reminder/draft', [\App\Http\Controllers\AiController::class, 'reminder'])->middleware('throttle:20,1')->name('invoices.reminder.draft');
     Route::post('/invoices/{invoice}/reminder/send', [\App\Http\Controllers\AiController::class, 'sendReminder'])->middleware('throttle:10,1')->name('invoices.reminder.send');

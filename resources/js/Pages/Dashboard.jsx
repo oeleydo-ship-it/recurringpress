@@ -1,9 +1,9 @@
 import AiInsightsCard from '@/Components/ai/AiInsightsCard';
 import { Link, usePage } from '@inertiajs/react';
-import { AlertCircle, ArrowRight, Banknote, Clock, FilePlus2, FileText, Receipt, TrendingDown, Users, Wallet } from 'lucide-react';
+import { AlertCircle, ArrowRight, ArrowUpCircle, Banknote, Clock, Crown, FilePlus2, FileText, TrendingDown } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import ClientOnly from '@/Components/ClientOnly';
-import { Badge, Button, Card, CardHeader, EmptyState, PageHeader, StatCard, StatusBadge } from '@/Components/ui';
+import { Button, Card, CardHeader, EmptyState, PageHeader, StatCard, StatusBadge } from '@/Components/ui';
 import { route } from '@/lib/route';
 import { cn, formatDate, formatMoney, titleCase } from '@/lib/utils';
 
@@ -28,10 +28,12 @@ export default function Dashboard({ stats, chart, statusBreakdown, recentInvoice
     return (
         <>
             <PageHeader
+                className="sm:flex-col sm:items-stretch sm:justify-start xl:flex-row xl:items-end xl:justify-between"
                 title="Dashboard"
                 description={`${greeting}, ${auth.user.name.split(' ')[0]}. Here's how ${auth.company?.name ?? 'your business'} is doing.`}
                 actions={
                     <>
+                        <PlanSummary usage={usage} canManage={auth.user.is_admin} dateFormat={dateFormat} />
                         <Button href={route('quotations.create')} variant="secondary" icon={FileText}>
                             New quotation
                         </Button>
@@ -208,41 +210,72 @@ export default function Dashboard({ stats, chart, statusBreakdown, recentInvoice
                             </div>
                         )}
                     </Card>
-
-                    <Card>
-                        <CardHeader title="Plan usage" actions={<Badge tone="brand">{usage.plan}</Badge>} />
-                        <div className="space-y-4 px-5 py-4">
-                            <UsageBar icon={Receipt} label="Invoices" data={usage.invoices} />
-                            <UsageBar icon={Users} label="Clients" data={usage.clients} />
-                            {auth.user.is_owner ? (
-                                <Button href={route('settings.subscription')} variant="soft" size="sm" className="w-full" icon={Wallet}>
-                                    Manage subscription
-                                </Button>
-                            ) : null}
-                        </div>
-                    </Card>
                 </div>
             </div>
         </>
     );
 }
 
-function UsageBar({ icon: Icon, label, data }) {
-    const pct = data.limit ? data.percent : 0;
+const STATUS_LABELS = { trial: 'Trial', active: 'Active', past_due: 'Past due', cancelled: 'Cancelled', expired: 'Expired' };
+
+/** Current plan, status and usage against limits, with an upgrade prompt when it is needed. */
+function PlanSummary({ usage, canManage, dateFormat }) {
+    const limited = Object.values(usage.limits)
+        .filter((l) => l.limit !== null)
+        .sort((a, b) => b.percent - a.percent);
+
+    const dateLine = usage.ends_at
+        ? usage.status === 'trial'
+            ? `Trial ends ${formatDate(usage.ends_at, dateFormat)}`
+            : ['cancelled', 'expired', 'past_due'].includes(usage.status)
+              ? `Ended ${formatDate(usage.ends_at, dateFormat)}`
+              : `Renews ${formatDate(usage.ends_at, dateFormat)}`
+        : null;
+
+    const hint =
+        usage.reason === 'lapsed'
+            ? 'Renew to keep full access'
+            : usage.reason === 'limit'
+              ? 'Close to a plan limit'
+              : usage.reason === 'free'
+                ? 'Upgrade for higher limits'
+                : null;
+
     return (
-        <div>
-            <div className="mb-1.5 flex items-center justify-between text-sm">
-                <span className="flex items-center gap-2 text-slate-600">
-                    <Icon className="size-4 text-slate-400" /> {label}
-                </span>
-                <span className="font-medium text-slate-900">
-                    {data.used}
-                    <span className="text-slate-400"> / {data.limit ?? '∞'}</span>
-                </span>
+        <div className="flex w-full items-center gap-3 rounded-xl bg-white px-4 py-2.5 shadow-card ring-1 ring-slate-900/5 sm:w-auto">
+            <span className={cn('hidden size-9 shrink-0 items-center justify-center rounded-lg sm:flex', usage.needs_upgrade ? 'bg-amber-50 text-amber-600' : 'bg-brand-50 text-brand-600')}>
+                <Crown className="size-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="text-sm font-semibold text-slate-900">{usage.plan} plan</span>
+                    <StatusBadge status={usage.status} label={STATUS_LABELS[usage.status]} />
+                    {dateLine ? <span className="text-xs text-slate-500">{dateLine}</span> : null}
+                </div>
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-500">
+                    {limited.length ? (
+                        limited.slice(0, 2).map((l) => (
+                            <span key={l.label} className={cn(l.percent >= 100 ? 'font-medium text-red-600' : l.percent >= 80 && 'font-medium text-amber-700')}>
+                                {l.label} {l.used}/{l.limit}
+                            </span>
+                        ))
+                    ) : (
+                        <span>Unlimited usage</span>
+                    )}
+                    {hint ? <span className="text-slate-400">{hint}</span> : null}
+                </div>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                <div className={cn('h-full rounded-full transition-all', pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-500' : 'bg-brand-500')} style={{ width: `${data.limit ? Math.max(pct, 2) : 4}%` }} />
-            </div>
+            {canManage ? (
+                usage.needs_upgrade ? (
+                    <Button href={route('settings.subscription')} size="sm" variant="primary" icon={ArrowUpCircle}>
+                        {usage.reason === 'lapsed' ? 'Renew' : 'Upgrade'}
+                    </Button>
+                ) : (
+                    <Button href={route('settings.subscription')} size="sm" variant="link">
+                        Manage plan
+                    </Button>
+                )
+            ) : null}
         </div>
     );
 }

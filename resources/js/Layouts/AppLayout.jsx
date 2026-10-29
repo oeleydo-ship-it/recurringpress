@@ -23,6 +23,7 @@ import {
     X,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import AiChat from '@/Components/ai/AiChat';
 import NotificationBell from '@/Components/notifications/NotificationBell';
 import { Avatar, Button, Dropdown } from '@/Components/ui';
 import { isCurrent, route } from '@/lib/route';
@@ -185,6 +186,8 @@ function TopBar({ user, onMenu }) {
                 <MenuIcon className="size-6" />
             </button>
             <div className="flex-1" />
+
+            <AiChat />
 
             <NotificationBell />
 

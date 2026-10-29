@@ -119,18 +119,41 @@ class DashboardController extends Controller
         return $series;
     }
 
+    /** Current plan, its status and usage against each plan limit, for the dashboard header. */
     private function usage($company): array
     {
         $plan = $company->subscriptionPlan ?? SubscriptionPlan::where('slug', 'free')->first();
-        $make = function (int $used, $limit) {
+        $make = function (string $label, int $used, $limit) {
             $limit = $limit !== null ? (int) $limit : null;
-            return ['used' => $used, 'limit' => $limit, 'percent' => $limit ? min(100, round($used / $limit * 100)) : 0];
+            return ['label' => $label, 'used' => $used, 'limit' => $limit, 'percent' => $limit ? min(100, round($used / $limit * 100)) : 0];
         };
+
+        $limits = [
+            'invoices' => $make('Invoices', $company->invoices()->count(), $plan?->max_invoices),
+            'clients' => $make('Clients', $company->clients()->count(), $plan?->max_clients),
+            'users' => $make('Team members', $company->users()->count(), $plan?->max_users),
+            'products' => $make('Products', $company->products()->count(), $plan?->max_products),
+        ];
+
+        $status = $company->subscription_status ?? 'active';
+        // A trial or paid term whose end date has passed is effectively lapsed.
+        if (in_array($status, ['active', 'trial'], true) && $company->subscription_ends_at?->isPast()) {
+            $status = 'expired';
+        }
+
+        $isFree = ! $plan || $plan->isFree();
+        $nearLimit = collect($limits)->contains(fn ($l) => $l['limit'] !== null && $l['percent'] >= 80);
+        $lapsed = in_array($status, ['past_due', 'cancelled', 'expired'], true);
 
         return [
             'plan' => $plan?->name ?? 'Free',
-            'invoices' => $make($company->invoices()->count(), $plan?->max_invoices),
-            'clients' => $make($company->clients()->count(), $plan?->max_clients),
+            'price' => $plan?->formatted_price ?? 'Free',
+            'is_free' => $isFree,
+            'status' => $status,
+            'ends_at' => $company->subscription_ends_at?->toDateString(),
+            'limits' => $limits,
+            'needs_upgrade' => $isFree || $nearLimit || $lapsed,
+            'reason' => $lapsed ? 'lapsed' : ($nearLimit ? 'limit' : ($isFree ? 'free' : null)),
         ];
     }
 
