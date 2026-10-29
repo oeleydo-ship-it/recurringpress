@@ -8,6 +8,7 @@ use App\Models\Invoice;
 use App\Services\Ai\AiClient;
 use App\Services\Ai\AiException;
 use App\Services\Ai\AiFeatures;
+use App\Services\Ai\AiTools;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -72,7 +73,24 @@ class AiController extends Controller
             'messages.*.content' => 'required|string|max:2000',
         ]);
 
-        return $this->run(fn () => $this->features->chat(auth()->user()->company, $validated['messages']));
+        return $this->run(fn () => $this->features->chat(auth()->user()->company, auth()->user(), $validated['messages']));
+    }
+
+    /**
+     * Create a record the chat proposed, after the user clicked Confirm. The token is the
+     * server-side pending action (single use, bound to this user and company), not a flag.
+     */
+    public function confirm(Request $request): JsonResponse
+    {
+        $request->validate(['token' => 'required|string|size:40']);
+
+        if (! AiClient::enabled()) {
+            return response()->json(['message' => 'AI features are not available right now.'], 422);
+        }
+
+        $result = AiTools::confirm($request->input('token'), auth()->user());
+
+        return response()->json($result, $result['ok'] ? 200 : 422);
     }
 
     private static function remindable(Invoice $invoice): bool

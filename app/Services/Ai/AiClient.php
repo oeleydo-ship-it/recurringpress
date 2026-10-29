@@ -22,6 +22,9 @@ class AiClient
 {
     public const DEFAULT_QUOTA = 100;
 
+    /** Follow-up calls inside one chat turn (tool rounds): logged, but not counted or blocked by the quota. */
+    public const STEP_FEATURE = 'chat_step';
+
     public static function monthlyQuota(): int
     {
         return max(0, (int) (SystemSetting::get('ai_monthly_quota') ?? self::DEFAULT_QUOTA));
@@ -38,6 +41,7 @@ class AiClient
         return AiUsageLog::where('company_id', $company->id)
             ->where('created_at', '>=', now()->startOfMonth())
             ->whereIn('status', ['ok', 'refused'])
+            ->where('feature', '!=', self::STEP_FEATURE)
             ->count();
     }
 
@@ -59,7 +63,7 @@ class AiClient
             throw new AiException('AI features are not available right now.');
         }
 
-        if ($company && self::remaining($company) <= 0) {
+        if ($company && $feature !== self::STEP_FEATURE && self::remaining($company) <= 0) {
             throw new AiException('You have used all ' . self::monthlyQuota() . ' AI requests for this month. The limit resets on the 1st.');
         }
 

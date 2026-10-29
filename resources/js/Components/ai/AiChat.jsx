@@ -1,6 +1,6 @@
 import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from '@headlessui/react';
-import { usePage } from '@inertiajs/react';
-import { AlertTriangle, ArrowUp, RotateCcw, Sparkles, X } from 'lucide-react';
+import { Link, usePage } from '@inertiajs/react';
+import { AlertTriangle, ArrowUp, Check, ExternalLink, RotateCcw, Sparkles, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/Components/ui';
 import { postJson } from '@/lib/http';
@@ -8,10 +8,10 @@ import { route } from '@/lib/route';
 import { cn } from '@/lib/utils';
 
 const STARTERS = [
+    'Show my unpaid invoices',
+    'Who are my top clients?',
+    'Expenses this month',
     'How is my business doing this month?',
-    'Which clients owe me money?',
-    'How do I set up a recurring invoice?',
-    'Tips to get paid faster',
 ];
 
 // The API takes the last few turns only, to keep requests small.
@@ -67,8 +67,18 @@ export default function AiChat() {
         setError(null);
         setLoading(true);
         try {
-            const res = await postJson(route('ai.chat'), { messages: next.slice(-HISTORY) });
-            setMessages([...next, { role: 'assistant', content: res.reply }]);
+            const res = await postJson(route('ai.chat'), {
+                messages: next.slice(-HISTORY).map(({ role, content }) => ({ role, content })),
+            });
+            setMessages([
+                ...next,
+                {
+                    role: 'assistant',
+                    content: res.reply,
+                    links: res.links ?? [],
+                    actions: (res.actions ?? []).map((a) => ({ ...a, state: 'pending' })),
+                },
+            ]);
             setSuggestions(res.suggestions ?? []);
             setRemaining(res.remaining);
         } catch (e) {
@@ -76,6 +86,26 @@ export default function AiChat() {
         } finally {
             setLoading(false);
             inputRef.current?.focus();
+        }
+    };
+
+    // Update one proposed action (by token) inside the message list.
+    const patchAction = (token, patch) =>
+        setMessages((list) =>
+            list.map((m) =>
+                m.actions?.some((a) => a.token === token) ? { ...m, actions: m.actions.map((a) => (a.token === token ? { ...a, ...patch } : a)) } : m,
+            ),
+        );
+
+    const confirmAction = async (action) => {
+        patchAction(action.token, { state: 'saving', error: null });
+        try {
+            const res = await postJson(route('ai.chat.confirm'), { token: action.token });
+            patchAction(action.token, { state: 'done', result: res });
+            // Also part of the history, so the model knows on the next turn what was saved.
+            setMessages((list) => [...list, { role: 'assistant', content: res.message, links: res.url ? [{ label: res.label, url: res.url }] : [] }]);
+        } catch (e) {
+            patchAction(action.token, { state: e.status === 422 ? 'failed' : 'pending', error: e.message });
         }
     };
 
@@ -124,13 +154,13 @@ export default function AiChat() {
                                     </span>
                                     <p className="mt-3 text-base font-semibold text-slate-900">How can I help?</p>
                                     <p className="mx-auto mt-1 max-w-xs text-sm text-slate-500">
-                                        Ask about your invoices, clients and cash flow, or how to do something in the app.
+                                        Ask about your invoices, clients, expenses and cash flow, or have me draft an invoice, quotation or expense for you to confirm.
                                     </p>
                                 </div>
                             ) : null}
 
                             {messages.map((m, i) => (
-                                <div key={i} className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
+                                <div key={i} className={cn('flex flex-col gap-2', m.role === 'user' ? 'items-end' : 'items-start')}>
                                     <div
                                         className={cn(
                                             'max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap break-words',
@@ -138,7 +168,34 @@ export default function AiChat() {
                                         )}
                                     >
                                         {m.content}
+                                        {m.links?.length ? (
+                                            <div className="mt-2 flex flex-wrap gap-1.5">
+                                                {m.links.map((l) => (
+                                                    <Link
+                                                        key={l.url}
+                                                        href={l.url}
+                                                        onClick={() => setOpen(false)}
+                                                        className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-0.5 text-xs font-medium text-brand-700 ring-1 ring-slate-200 hover:bg-brand-50"
+                                                    >
+                                                        {l.label} <ExternalLink className="size-3" />
+                                                    </Link>
+                                                ))}
+                                            </div>
+                                        ) : null}
                                     </div>
+                                    {m.actions?.length ? (
+                                        <div className="w-full max-w-[85%] space-y-2">
+                                            {m.actions.map((a) => (
+                                                <ActionCard
+                                                    key={a.token}
+                                                    action={a}
+                                                    onConfirm={() => confirmAction(a)}
+                                                    onCancel={() => patchAction(a.token, { state: 'cancelled' })}
+                                                    onOpen={() => setOpen(false)}
+                                                />
+                                            ))}
+                                        </div>
+                                    ) : null}
                                 </div>
                             ))}
 
@@ -209,5 +266,55 @@ export default function AiChat() {
                 </div>
             </Dialog>
         </>
+    );
+}
+
+/** A record the assistant proposed; it is created only when the user clicks Confirm. */
+function ActionCard({ action, onConfirm, onCancel, onOpen }) {
+    const { state } = action;
+
+    return (
+        <div className="rounded-xl bg-white p-3 text-sm ring-1 ring-slate-200">
+            <div className="flex items-baseline justify-between gap-2">
+                <p className="font-semibold text-slate-900">{action.title}</p>
+                {action.total ? <p className="shrink-0 font-semibold text-slate-900 tabular-nums">{action.total}</p> : null}
+            </div>
+            <ul className="mt-1.5 space-y-0.5 text-xs text-slate-600">
+                {action.lines.map((line, i) => (
+                    <li key={i} className="break-words">
+                        {line}
+                    </li>
+                ))}
+            </ul>
+
+            {state === 'done' ? (
+                <div className="mt-3 flex items-center justify-between gap-2 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs text-emerald-800">
+                    <span className="flex items-center gap-1">
+                        <Check className="size-3.5" /> {action.result?.message}
+                    </span>
+                    {action.result?.url ? (
+                        <Link href={action.result.url} onClick={onOpen} className="font-semibold underline">
+                            Open
+                        </Link>
+                    ) : null}
+                </div>
+            ) : state === 'cancelled' ? (
+                <p className="mt-3 text-xs text-slate-400">Cancelled. Nothing was saved.</p>
+            ) : state === 'failed' ? (
+                <p className="mt-3 rounded-lg bg-red-50 px-2.5 py-1.5 text-xs text-red-700">{action.error}</p>
+            ) : (
+                <>
+                    {action.error ? <p className="mt-2 text-xs text-red-600">{action.error}</p> : null}
+                    <div className="mt-3 flex gap-2">
+                        <Button size="sm" icon={Check} onClick={onConfirm} disabled={state === 'saving'}>
+                            {state === 'saving' ? 'Saving…' : 'Confirm'}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={onCancel} disabled={state === 'saving'}>
+                            Cancel
+                        </Button>
+                    </div>
+                </>
+            )}
+        </div>
     );
 }
