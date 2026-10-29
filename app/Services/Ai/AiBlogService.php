@@ -25,6 +25,9 @@ class AiBlogService
         'https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?auto=format&fit=crop&w=1200&q=80', // Budget and coins growth
     ];
 
+    /** Banned phrases still present in the last generated post (see AiWritingStyle). */
+    public array $lastStyleIssues = [];
+
     public function __construct(private AiClient $ai) {}
 
     /**
@@ -61,6 +64,7 @@ class AiBlogService
             '   - NEVER use <h1> or <html>/<body> tags.',
             $includeFaq ? '   - Include an FAQ section near the end with 3-4 pertinent questions formatted with <h3> for questions and <p> for detailed answers.' : '',
             '   - Conclude with a practical summary and a natural call to action recommending streamlined invoicing practices.',
+            AiWritingStyle::promptRules(),
         ]);
 
         $userPrompt = "Please generate a complete, high-ranking SEO blog post centered around the keyword/topic: \"{$keyword}\". Provide thorough depth, real value, practical examples, and compelling structure.";
@@ -121,6 +125,25 @@ class AiBlogService
         if (trim(strip_tags($data['content'])) === '') {
             throw new AiException('The AI returned empty article content.');
         }
+
+        // Banned words/phrases (Superadmin writing controls): one rewrite pass if any slipped through.
+        [$data, $this->lastStyleIssues] = AiWritingStyle::enforce(
+            $this->ai,
+            'ai_blog_revise',
+            $data,
+            $schema,
+            ['title', 'excerpt', 'meta_title', 'meta_description', 'content'],
+            function (array $revised) {
+                foreach (['title', 'content', 'slug', 'excerpt', 'meta_title', 'meta_description'] as $field) {
+                    if (! is_string($revised[$field] ?? null) || trim($revised[$field]) === '') {
+                        throw new AiException('Incomplete revision.');
+                    }
+                }
+                $revised['content'] = $this->cleanHtml($revised['content']);
+
+                return $revised;
+            },
+        );
         foreach (['title' => 255, 'excerpt' => 500, 'meta_title' => 255, 'meta_description' => 255] as $field => $limit) {
             $data[$field] = mb_substr(strip_tags($data[$field]), 0, $limit);
         }
@@ -262,7 +285,7 @@ class AiBlogService
     }
 
     /** Keep generated HTML limited to article formatting and safe links. */
-    private function cleanHtml(string $html): string
+    public static function cleanHtml(string $html): string
     {
         $doc = new \DOMDocument;
         $previous = libxml_use_internal_errors(true);

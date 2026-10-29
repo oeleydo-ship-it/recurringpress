@@ -4,6 +4,10 @@ namespace App\Http\Controllers\Superadmin;
 
 use App\Http\Controllers\Controller;
 use App\Models\CmsPage;
+use App\Services\Ai\AiClient;
+use App\Services\Ai\AiException;
+use App\Services\Ai\AiPageService;
+use App\Services\Ai\AiWritingStyle;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -29,7 +33,38 @@ class PageController extends Controller
 
     public function create()
     {
-        return Inertia::render('Superadmin/Pages/Form', ['page' => null]);
+        return Inertia::render('Superadmin/Pages/Form', ['page' => null, 'ai' => $this->aiOptions()]);
+    }
+
+    /** Draft page fields with AI (JSON). Nothing is saved; the editor reviews and saves. */
+    public function aiGenerate(Request $request, AiPageService $pages)
+    {
+        $validated = $request->validate([
+            'brief' => 'required|string|min:10|max:3000',
+            'type' => ['required', Rule::in(array_keys(AiPageService::TYPES))],
+            'tone' => 'required|string|max:100',
+            'language' => 'required|string|max:50',
+            'length' => ['required', Rule::in(array_keys(AiPageService::LENGTHS))],
+        ]);
+
+        @set_time_limit(180);
+
+        try {
+            return response()->json($pages->generate($validated['brief'], $validated['type'], $validated['tone'], $validated['language'], $validated['length']));
+        } catch (AiException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+    }
+
+    private function aiOptions(): array
+    {
+        return [
+            'available' => AiClient::enabled(),
+            'types' => AiPageService::TYPES,
+            'lengths' => ['short' => 'Short (~300 words)', 'medium' => 'Medium (~700 words)', 'long' => 'Long (~1,200 words)'],
+            'banned_count' => count(AiWritingStyle::banned()),
+            'human_style' => AiWritingStyle::humanStyle(),
+        ];
     }
 
     public function store(Request $request)
@@ -50,6 +85,7 @@ class PageController extends Controller
                 'show_title' => $page->show_title === null ? true : (bool) $page->show_title,
                 'url' => route('page.show', $page->slug),
             ],
+            'ai' => $this->aiOptions(),
         ]);
     }
 

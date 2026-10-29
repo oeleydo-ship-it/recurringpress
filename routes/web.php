@@ -250,6 +250,7 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
         Route::get('/account', [SuperadminAccountController::class, 'edit'])->name('account');
         Route::put('/account', [SuperadminAccountController::class, 'update'])->middleware('throttle:6,1')->name('account.update');
         Route::put('/account/password', [SuperadminAccountController::class, 'updatePassword'])->middleware('throttle:6,1')->name('account.password');
+        Route::post('/pages/ai-generate', [SuperadminPageController::class, 'aiGenerate'])->middleware('throttle:10,1')->name('pages.ai-generate');
         Route::resource('pages', SuperadminPageController::class)->except(['show']);
         Route::put('/posts/ai-settings', [SuperadminPostController::class, 'updateAiSettings'])->name('posts.ai-settings');
         Route::post('/posts/ai-generate', [SuperadminPostController::class, 'generateAiPost'])->name('posts.ai-generate');

@@ -52,7 +52,8 @@ class GenerateAiBlogPostJob implements ShouldQueue
             $run?->update(['status' => 'running', 'error' => null]);
             DB::transaction(function () use ($blogService, $run) {
                 $post = $blogService->generateAndCreate($this->keyword, $this->options);
-                $run?->update(['status' => 'completed', 'post_id' => $post->id, 'error' => null]);
+                $issues = $blogService->lastStyleIssues;
+                $run?->update(['status' => 'completed', 'post_id' => $post->id, 'error' => $issues ? 'Saved. Still contains banned wording: ' . implode(', ', $issues) . '. Edit the post before publishing.' : null]);
             });
         } catch (Throwable $e) {
             if (isset($run)) {

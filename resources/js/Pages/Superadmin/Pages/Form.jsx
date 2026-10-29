@@ -1,13 +1,14 @@
 import { useForm } from '@inertiajs/react';
 import { ExternalLink, LayoutTemplate, Save, Type } from 'lucide-react';
 import BlockEditor from '@/Components/BlockEditor';
+import AiPageWriter from '@/Components/ai/AiPageWriter';
 import RichTextEditor from '@/Components/RichTextEditor';
 import { Button, Card, CardBody, CardFooter, CardHeader, FieldError, FormField, Input, PageHeader, Segmented, Switch, Textarea } from '@/Components/ui';
 import { uploadMedia } from '@/lib/media';
 import { route } from '@/lib/route';
 
 
-export default function PageForm({ page }) {
+export default function PageForm({ page, ai }) {
     const editing = Boolean(page);
     const form = useForm({
         title: page?.title ?? '',
@@ -50,6 +51,22 @@ export default function PageForm({ page }) {
             />
             <form onSubmit={submit} noValidate className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
                 <div className="min-w-0 space-y-6">
+                    <AiPageWriter
+                        ai={ai}
+                        current={{ title: d.title, content: d.content }}
+                        onApply={(draft) =>
+                            form.setData((x) => ({
+                                ...x,
+                                title: draft.title,
+                                // Keep an existing page's URL; only fill the slug for new pages.
+                                slug: editing ? x.slug : draft.slug,
+                                meta_title: draft.meta_title,
+                                meta_description: draft.meta_description,
+                                content: draft.content,
+                                editor_mode: 'classic',
+                            }))
+                        }
+                    />
                     <Card>
                         <CardBody className="space-y-4">
                             <FormField label="Title" required error={e.title}>

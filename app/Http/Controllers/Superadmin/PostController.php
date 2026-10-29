@@ -8,6 +8,7 @@ use App\Models\CmsPost;
 use App\Models\SystemSetting;
 use App\Services\Ai\AiBlogService;
 use App\Services\Ai\AiClient;
+use App\Services\Ai\AiWritingStyle;
 use App\Services\Ai\AiProviders;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -62,6 +63,10 @@ class PostController extends Controller
                 'language' => (string) SystemSetting::get('ai_blog_language', 'English'),
                 'status' => (string) SystemSetting::get('ai_blog_status', 'scheduled'),
                 'include_faq' => filter_var(SystemSetting::get('ai_blog_include_faq', true), FILTER_VALIDATE_BOOL),
+                // Writing controls, shared with AI page generation (see AiWritingStyle).
+                'writing_human_style' => AiWritingStyle::humanStyle(),
+                'writing_banned_phrases' => AiWritingStyle::bannedText(),
+                'writing_notes' => AiWritingStyle::notes(),
                 'last_generated_at' => SystemSetting::get('ai_blog_last_generated_at'),
                 'total_keywords' => count($parsedKeywords),
                 'unused_keywords' => $unusedCount,
@@ -164,6 +169,9 @@ class PostController extends Controller
             'ai_blog_language' => 'required|string|max:50',
             'ai_blog_status' => 'required|in:scheduled,published,draft',
             'ai_blog_include_faq' => 'nullable|boolean',
+            'ai_writing_human_style' => 'nullable|boolean',
+            'ai_writing_banned_phrases' => 'nullable|string|max:10000',
+            'ai_writing_notes' => 'nullable|string|max:2000',
         ]);
 
         if ($request->boolean('ai_blog_enabled')) {
@@ -188,6 +196,7 @@ class PostController extends Controller
         SystemSetting::set('ai_blog_language', $validated['ai_blog_language']);
         SystemSetting::set('ai_blog_status', $validated['ai_blog_status']);
         SystemSetting::set('ai_blog_include_faq', $request->boolean('ai_blog_include_faq') ? '1' : '0');
+        AiWritingStyle::save($request->boolean('ai_writing_human_style'), (string) ($validated['ai_writing_banned_phrases'] ?? ''), (string) ($validated['ai_writing_notes'] ?? ''));
 
         return back()->with('success', 'AI Auto-Blogger settings saved.');
     }
@@ -223,7 +232,11 @@ class PostController extends Controller
             try {
                 $post = $blogService->generateAndCreate($validated['keyword'], $options);
 
-                return redirect()->route('superadmin.posts.edit', $post)->with('success', "AI blog post successfully generated for “{$validated['keyword']}”.");
+                $redirect = redirect()->route('superadmin.posts.edit', $post)->with('success', "AI blog post successfully generated for “{$validated['keyword']}”.");
+
+                return $blogService->lastStyleIssues
+                    ? $redirect->with('warning', 'Still contains banned wording: ' . implode(', ', $blogService->lastStyleIssues) . '. Please edit before publishing.')
+                    : $redirect;
             } catch (\Throwable $e) {
                 return back()->with('error', 'Generation failed. Check your provider connection and AI usage errors, then try again.');
             }

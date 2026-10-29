@@ -67,6 +67,9 @@ export default function SuperadminPosts({ posts, aiSettings, stats, generationRu
         ai_blog_language: aiSettings?.language ?? 'English',
         ai_blog_status: aiSettings?.status ?? 'scheduled',
         ai_blog_include_faq: aiSettings?.include_faq ?? true,
+        ai_writing_human_style: aiSettings?.writing_human_style ?? true,
+        ai_writing_banned_phrases: aiSettings?.writing_banned_phrases ?? '',
+        ai_writing_notes: aiSettings?.writing_notes ?? '',
     });
 
     // Quick single post generator form
@@ -498,6 +501,36 @@ export default function SuperadminPosts({ posts, aiSettings, stats, generationRu
                             checked={schedulerForm.data.ai_blog_include_faq}
                             onChange={(val) => schedulerForm.setData('ai_blog_include_faq', val)}
                         />
+                    </div>
+
+                    {/* Writing controls: shared with AI page generation (Pages → Write with AI). */}
+                    <div className="space-y-4 rounded-xl border border-slate-200 p-4">
+                        <div>
+                            <span className="block text-sm font-semibold text-slate-900">Writing controls</span>
+                            <span className="text-xs text-slate-500">Apply to AI blog posts and AI-written pages. After writing, the text is checked and rewritten once if a banned phrase slipped through.</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-4">
+                            <div>
+                                <span className="block text-sm font-medium text-slate-700">Write like a person</span>
+                                <span className="text-xs text-slate-500">Plain words, varied sentences, no hype or filler, never mentions AI.</span>
+                            </div>
+                            <Switch checked={schedulerForm.data.ai_writing_human_style} onChange={(val) => schedulerForm.setData('ai_writing_human_style', val)} />
+                        </div>
+                        <FormField
+                            label="Never use these words or phrases (one per line)"
+                            hint="Pre-filled with wording that reads as machine-written. Add or remove anything."
+                            error={schedulerForm.errors.ai_writing_banned_phrases}
+                        >
+                            <Textarea
+                                rows={6}
+                                value={schedulerForm.data.ai_writing_banned_phrases}
+                                onChange={(e) => schedulerForm.setData('ai_writing_banned_phrases', e.target.value)}
+                                className="font-mono text-sm leading-relaxed"
+                            />
+                        </FormField>
+                        <FormField label="House style notes (optional)" hint="e.g. Use British spelling. Say 'customers', not 'clients'. Keep paragraphs under 4 sentences." error={schedulerForm.errors.ai_writing_notes}>
+                            <Textarea rows={3} value={schedulerForm.data.ai_writing_notes} onChange={(e) => schedulerForm.setData('ai_writing_notes', e.target.value)} maxLength={2000} />
+                        </FormField>
                     </div>
                 </form>
             </Modal>
