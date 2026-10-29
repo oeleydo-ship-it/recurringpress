@@ -48,8 +48,8 @@ class ExpenseController extends Controller
             'count' => (clone $query)->count(),
         ];
 
-        $byCategory = (clone $query)->select('category', DB::raw('SUM(amount) as total'))
-            ->groupBy('category')->orderByDesc('total')->pluck('total', 'category')
+        $byCategory = (clone $query)->select('category', DB::raw('SUM(amount) as category_total'))
+            ->groupBy('category')->orderByDesc('category_total')->pluck('category_total', 'category')
             ->map(fn ($v) => (float) $v);
 
         $expenses = $query->orderBy('expense_date', 'desc')->orderByDesc('id')->paginate(15)->withQueryString();
@@ -182,7 +182,7 @@ class ExpenseController extends Controller
 
     protected function validated(Request $request): array
     {
-        return $request->validate([
+        $validated = $request->validate([
             'title' => 'required|string|max:255',
             'category' => ['required', Rule::in(array_keys(Expense::categories()))],
             'description' => 'nullable|string|max:2000',
@@ -199,6 +199,11 @@ class ExpenseController extends Controller
             'is_billable' => 'nullable|boolean',
             'is_reimbursed' => 'nullable|boolean',
         ]);
+
+        // A blank "Tax paid" arrives as null, but expenses.tax_amount is NOT NULL.
+        $validated['tax_amount'] ??= 0;
+
+        return $validated;
     }
 
     /**
