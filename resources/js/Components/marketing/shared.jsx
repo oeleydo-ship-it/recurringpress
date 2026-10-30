@@ -1,3 +1,4 @@
+import { Disclosure, DisclosureButton, DisclosurePanel } from '@headlessui/react';
 import { Link } from '@inertiajs/react';
 import { useState } from 'react';
 import {
@@ -6,6 +7,7 @@ import {
     Building2,
     Calendar,
     Check,
+    ChevronDown,
     Clock,
     Cloud,
     CreditCard,
@@ -15,6 +17,7 @@ import {
     Headphones,
     Heart,
     Layers,
+    ListPlus,
     Lock,
     Mail,
     Palette,
@@ -107,7 +110,70 @@ const accents = {
     indigo: 'bg-indigo-50 text-indigo-600',
     teal: 'bg-teal-50 text-teal-600',
 };
-export const accent = (color) => accents[color] ?? accents.indigo;
+export const accent = (color) => accents[color] ?? accents.blue;
+
+const btn = 'inline-flex h-10 items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-medium transition-colors';
+export const btnBlue = cn(btn, 'bg-blue-600 text-white shadow-sm shadow-blue-600/25 hover:bg-blue-700');
+export const btnOutline = cn(btn, 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 hover:text-slate-900');
+
+export const CHIPS = [
+    'Invoices',
+    'Quotations',
+    'Recurring billing',
+    'Clients',
+    'Products & services',
+    'Expenses',
+    'Stripe payments',
+    'Receipts',
+    'Reports',
+    'Multi-currency',
+    'Invoice templates',
+    'Custom fields',
+    'Ask AI',
+    'Custom domains',
+    'Payment reminders',
+    'Tax rates',
+];
+
+export const TOOLKIT = [
+    [Palette, 'Custom templates', 'Pick a template, add your logo and colours, and every PDF matches your brand.'],
+    [Globe, 'Multi-currency', 'Bill each client in their own currency with the right symbols and formats.'],
+    [ListPlus, 'Custom fields', 'Add your own fields to invoices, quotes, clients, products and expenses.'],
+    [Sparkles, 'Ask AI', 'Ask about your numbers or have AI draft an invoice, quote or expense for you.'],
+];
+
+/** Endless row of feature chips (static and wrapped for reduced-motion users). */
+export function ChipMarquee({ className }) {
+    return (
+        <div className={cn('relative overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_12%,black_88%,transparent)]', className)}>
+            <div className="flex w-max animate-marquee gap-3 motion-reduce:w-full motion-reduce:animate-none motion-reduce:flex-wrap motion-reduce:justify-center">
+                {[0, 1].map((copy) => (
+                    <ul key={copy} className={cn('flex shrink-0 gap-3', copy === 1 && 'motion-reduce:hidden')} aria-hidden={copy === 1 || undefined}>
+                        {CHIPS.map((c) => (
+                            <li key={c} className="rounded-full bg-white px-4 py-1.5 text-sm whitespace-nowrap text-slate-600 ring-1 ring-slate-200">
+                                {c}
+                            </li>
+                        ))}
+                    </ul>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+/** Top-of-page header shared by the inner marketing pages: eyebrow, h1, subtitle on a soft blue wash. */
+export function PageHero({ eyebrow, title, subtitle, children }) {
+    return (
+        <section className="bg-gradient-to-b from-blue-50/80 to-white">
+            <div className="mx-auto max-w-3xl px-4 pt-16 pb-14 text-center sm:px-6 lg:pt-20">
+                {eyebrow ? <p className="text-xs font-semibold tracking-[0.14em] text-blue-600 uppercase">{eyebrow}</p> : null}
+                <h1 className="mt-4 text-4xl leading-[1.1] font-semibold tracking-tight text-balance text-slate-900 sm:text-5xl">{title}</h1>
+                {subtitle ? <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-pretty text-slate-500 sm:text-lg">{subtitle}</p> : null}
+                {children ? <div className="mt-8 flex flex-wrap items-center justify-center gap-3">{children}</div> : null}
+            </div>
+        </section>
+    );
+}
 
 export function SectionHeading({ eyebrow, title, subtitle, className, dark = false }) {
     return (
@@ -122,8 +188,8 @@ export function SectionHeading({ eyebrow, title, subtitle, className, dark = fal
 export function FeatureCard({ item }) {
     const Icon = faIcon(item.icon);
     return (
-        <div className="group rounded-2xl bg-white p-6 ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-lg hover:ring-slate-300">
-            <span className={cn('flex size-11 items-center justify-center rounded-xl', accent(item.color))}>
+        <div className="group rounded-2xl bg-white p-6 ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-blue-900/5 hover:ring-blue-200">
+            <span className="flex size-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
                 <Icon className="size-5" />
             </span>
             <h3 className="mt-5 text-base font-semibold text-slate-900">{item.title}</h3>
@@ -237,22 +303,37 @@ export function PricingCards({ plans }) {
     );
 }
 
-export function CtaBand({ title = 'Ready to get paid faster?', subtitle = 'Create your free account in under a minute. No credit card required.' }) {
+/** Full-width solid-blue closing band, same treatment as the homepage features band. */
+export function CtaBand({ eyebrow = 'Get started', title = 'Ready to get paid faster?', subtitle = 'Create your free account in under a minute. No credit card required.' }) {
     return (
-        <section className="px-4 py-20 sm:px-6 lg:px-8">
-            <div className="relative mx-auto max-w-5xl overflow-hidden rounded-3xl bg-blue-600 px-6 py-16 text-center shadow-xl shadow-blue-600/20 sm:px-16">
-                <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(50% 60% at 20% 0%, rgb(255 255 255 / 0.16), transparent 70%)' }} />
-                <h2 className="relative text-3xl font-semibold tracking-tight text-balance text-white sm:text-4xl">{title}</h2>
-                <p className="relative mx-auto mt-4 max-w-xl text-lg text-blue-100">{subtitle}</p>
-                <div className="relative mt-8 flex flex-wrap items-center justify-center gap-3">
-                    <Button href={route('register')} size="lg" className="bg-white text-blue-700 hover:bg-blue-50">
+        <section className="bg-blue-600 py-20 sm:py-24">
+            <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
+                <SectionHeading dark eyebrow={eyebrow} title={title} subtitle={subtitle} />
+                <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+                    <Link href={route('register')} className="inline-flex h-10 items-center justify-center rounded-lg bg-white px-5 text-sm font-medium text-blue-700 hover:bg-blue-50">
                         Start for free
-                    </Button>
-                    <Link href={route('landing.pricing')} className="px-4 py-2 text-sm font-semibold text-white hover:text-blue-100">
-                        See pricing →
+                    </Link>
+                    <Link href={route('landing.pricing')} className="inline-flex h-10 items-center justify-center rounded-lg px-5 text-sm font-medium text-white ring-1 ring-white/40 hover:bg-white/10">
+                        See pricing
                     </Link>
                 </div>
             </div>
         </section>
+    );
+}
+
+export function FaqItem({ q, a }) {
+    return (
+        <Disclosure as="div" className="px-6">
+            <DisclosureButton className="group flex w-full items-center justify-between gap-4 py-5 text-left">
+                <span className="font-medium text-slate-900 group-hover:text-blue-600">{q}</span>
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600 transition group-data-open:rotate-180">
+                    <ChevronDown className="size-4" />
+                </span>
+            </DisclosureButton>
+            <DisclosurePanel transition className="origin-top pb-5 text-sm leading-relaxed text-slate-500 transition duration-150 data-closed:-translate-y-1 data-closed:opacity-0">
+                {a}
+            </DisclosurePanel>
+        </Disclosure>
     );
 }
