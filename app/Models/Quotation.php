@@ -10,6 +10,8 @@ use Illuminate\Support\Str;
 
 class Quotation extends Model
 {
+    use \App\Models\Concerns\HasCustomValues;
+
     protected $fillable = [
         'company_id', 'client_id', 'user_id', 'quotation_number', 'reference',
         'issue_date', 'valid_until', 'status', 'subtotal', 'tax_amount',

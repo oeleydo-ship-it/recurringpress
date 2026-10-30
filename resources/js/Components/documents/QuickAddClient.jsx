@@ -1,19 +1,20 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import ClientFields, { emptyClient } from '@/Components/ClientFields';
+import { CustomFieldInputs, initialCustomValues } from '@/Components/CustomFields';
 import { Button, Modal } from '@/Components/ui';
 import { postJson } from '@/lib/http';
 import { route } from '@/lib/route';
 
 /** Create a client without leaving the invoice/quotation editor. Calls onCreated({id,label,email}). */
-export default function QuickAddClient({ open, onClose, initialName = '', onCreated }) {
+export default function QuickAddClient({ open, onClose, initialName = '', onCreated, customFields = [] }) {
     const [data, setDataState] = useState(emptyClient);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
         if (open) {
-            setDataState({ ...emptyClient, name: initialName });
+            setDataState({ ...emptyClient, name: initialName, custom_values: initialCustomValues(customFields) });
             setErrors({});
         }
     }, [open, initialName]);
@@ -55,6 +56,7 @@ export default function QuickAddClient({ open, onClose, initialName = '', onCrea
         >
             <form onSubmit={save} noValidate>
                 <ClientFields data={data} setData={setData} errors={errors} compact />
+                <CustomFieldInputs fields={customFields} values={data.custom_values ?? {}} onChange={(v) => setData('custom_values', v)} errors={errors} className="mt-5 border-t border-slate-100 pt-5" />
                 <button type="submit" className="hidden" />
             </form>
         </Modal>

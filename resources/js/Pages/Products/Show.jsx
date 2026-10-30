@@ -1,11 +1,12 @@
 import { router, usePage } from '@inertiajs/react';
 import { Banknote, FileText, Hash, Pencil, Repeat, Trash2 } from 'lucide-react';
 import { Badge, Button, Card, CardHeader, DescriptionItem, Dropdown, PageHeader, StatCard, useConfirm } from '@/Components/ui';
+import { CustomFieldValues } from '@/Components/CustomFields';
 import { route } from '@/lib/route';
 import { formatMoney, formatNumber } from '@/lib/utils';
 import { typeMeta } from './Index';
 
-export default function ProductShow({ product, units, billingCycles, usage }) {
+export default function ProductShow({ product, units, billingCycles, usage, customFields = [] }) {
     const { auth } = usePage().props;
     const currency = auth.company?.currency;
     const confirm = useConfirm();
@@ -68,6 +69,7 @@ export default function ProductShow({ product, units, billingCycles, usage }) {
                         </DescriptionItem>
                     ) : null}
                 </dl>
+                <CustomFieldValues fields={customFields} values={product.custom_values} className="border-t border-slate-100 p-5 lg:grid-cols-3" />
             </Card>
         </>
     );

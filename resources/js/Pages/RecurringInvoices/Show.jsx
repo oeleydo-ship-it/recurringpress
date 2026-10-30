@@ -1,12 +1,13 @@
 import { Link, router, usePage } from '@inertiajs/react';
 import { CalendarClock, FileText, Pause, Pencil, Play, Send, Trash2, XCircle, Zap } from 'lucide-react';
 import { Badge, Button, Card, CardHeader, DescriptionItem, Dropdown, EmptyState, PageHeader, StatusBadge, Table, TBody, TD, TH, THead, TR, useConfirm } from '@/Components/ui';
+import { CustomFieldValuesCard } from '@/Components/CustomFields';
 import { route } from '@/lib/route';
 import { formatDate, formatMoney } from '@/lib/utils';
 
 const cycleLabel = { weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Every 3 months', semi_annual: 'Every 6 months', annual: 'Yearly' };
 
-export default function RecurringShow({ recurring: r, upcoming, invoices }) {
+export default function RecurringShow({ recurring: r, upcoming, invoices, customFields = [] }) {
     const { auth } = usePage().props;
     const currency = auth.company?.currency;
     const df = auth.company?.date_format;
@@ -174,6 +175,7 @@ export default function RecurringShow({ recurring: r, upcoming, invoices }) {
                             </DescriptionItem>
                         </dl>
                     </Card>
+                    <CustomFieldValuesCard fields={customFields} values={r.custom_values} />
                     {upcoming.length ? (
                         <Card>
                             <CardHeader title="Upcoming invoices" />

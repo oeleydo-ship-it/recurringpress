@@ -131,6 +131,7 @@
         </div>
         @endif
 
+        @include('invoices.pdf.partials.custom-fields', ['doc' => $quotation, 'entity' => 'quotation'])
         @include('quotations.pdf.partials.website-message')
 
         @if($quotation->company->invoice_footer)

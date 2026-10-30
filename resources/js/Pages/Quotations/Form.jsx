@@ -3,11 +3,13 @@ import { FormField, Input } from '@/Components/ui';
 import { route } from '@/lib/route';
 import { today } from '@/lib/utils';
 
-export default function QuotationForm({ quotation, nextNumber, selectedClientId, clients, products, units, defaults }) {
+export default function QuotationForm({ quotation, nextNumber, selectedClientId, clients, products, units, defaults, customFields, clientCustomFields }) {
     const editing = Boolean(quotation);
 
     return (
         <DocumentEditor
+            customFields={customFields}
+            clientCustomFields={clientCustomFields}
             title={editing ? `Edit ${quotation.quotation_number}` : 'New quotation'}
             back={editing ? route('quotations.show', quotation.id) : route('quotations.index')}
             doc={quotation}

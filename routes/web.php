@@ -233,6 +233,9 @@ Route::middleware(['auth', 'tenant', 'verified', \App\Http\Middleware\CheckOnboa
         Route::put('/settings/subdomain', [SettingsController::class, 'updateSubdomain'])->middleware('throttle:10,1')->name('settings.subdomain');
         Route::delete('/settings/subdomain', [SettingsController::class, 'removeSubdomain'])->name('settings.subdomain.remove');
         Route::put('/settings/email',[SettingsController::class, 'updateEmail'])->name('settings.email');
+        Route::post('/settings/custom-fields', [\App\Http\Controllers\CustomFieldController::class, 'store'])->name('settings.custom-fields.store');
+        Route::put('/settings/custom-fields/{customField}', [\App\Http\Controllers\CustomFieldController::class, 'update'])->name('settings.custom-fields.update');
+        Route::delete('/settings/custom-fields/{customField}', [\App\Http\Controllers\CustomFieldController::class, 'destroy'])->name('settings.custom-fields.destroy');
         Route::post('/settings/email/test', [SettingsController::class, 'testEmail'])->middleware('throttle:6,1')->name('settings.email.test');
     });
 });

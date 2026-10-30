@@ -21,10 +21,11 @@ import {
     useConfirm,
     useFilters,
 } from '@/Components/ui';
+import { CustomCell } from '@/Components/CustomFields';
 import { route } from '@/lib/route';
 import { formatMoney } from '@/lib/utils';
 
-export default function ClientsIndex({ clients, filters: initial }) {
+export default function ClientsIndex({ clients, filters: initial, customColumns = [] }) {
     const { auth } = usePage().props;
     const currency = auth.company?.currency;
     const confirm = useConfirm();
@@ -62,6 +63,11 @@ export default function ClientsIndex({ clients, filters: initial }) {
                                 <TH>Client</TH>
                                 <TH className="hidden md:table-cell">Contact</TH>
                                 <TH className="hidden lg:table-cell">Location</TH>
+                                {customColumns.map((f) => (
+                                    <TH key={f.key} className="hidden lg:table-cell">
+                                        {f.label}
+                                    </TH>
+                                ))}
                                 <TH align="right">Invoices</TH>
                                 <TH align="right">Billed</TH>
                                 <TH className="w-10" />
@@ -89,6 +95,11 @@ export default function ClientsIndex({ clients, filters: initial }) {
                                             <div className="text-xs text-slate-500">{c.phone}</div>
                                         </TD>
                                         <TD className="hidden text-slate-500 lg:table-cell">{[c.city, c.country].filter(Boolean).join(', ') || '—'}</TD>
+                                        {customColumns.map((f) => (
+                                            <TD key={f.key} className="hidden max-w-48 truncate lg:table-cell">
+                                                <CustomCell field={f} values={c.custom_values} />
+                                            </TD>
+                                        ))}
                                         <TD align="right">{c.invoices_count}</TD>
                                         <TD align="right" className="font-medium text-slate-900">
                                             {formatMoney(c.total_billed, currency)}

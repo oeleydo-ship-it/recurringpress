@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Builder;
 class Expense extends Model
 {
     use HasFactory;
+    use \App\Models\Concerns\HasCustomValues;
 
     protected $fillable = [
         'company_id',

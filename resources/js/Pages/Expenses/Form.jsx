@@ -1,10 +1,11 @@
 import { useForm, usePage } from '@inertiajs/react';
 import { FileUp, Paperclip, Save, X } from 'lucide-react';
 import { Button, Card, CardBody, CardFooter, CardHeader, Checkbox, Combobox, FieldError, FormField, Input, PageHeader, Select, Textarea } from '@/Components/ui';
+import { CustomFieldInputs, initialCustomValues } from '@/Components/CustomFields';
 import { route } from '@/lib/route';
 import { formatMoney, today } from '@/lib/utils';
 
-export default function ExpenseForm({ expense, categories, paymentMethods, invoices }) {
+export default function ExpenseForm({ expense, categories, paymentMethods, invoices, customFields = [] }) {
     const { auth } = usePage().props;
     const editing = Boolean(expense);
     const symbol = auth.company?.currency_symbol;
@@ -23,6 +24,7 @@ export default function ExpenseForm({ expense, categories, paymentMethods, invoi
         is_reimbursed: expense?.is_reimbursed ?? false,
         receipt: null,
         remove_receipt: false,
+        custom_values: initialCustomValues(customFields, expense?.custom_values),
     });
     const d = form.data;
     const e = form.errors;
@@ -80,6 +82,7 @@ export default function ExpenseForm({ expense, categories, paymentMethods, invoi
                             <Checkbox label="Billable to a client" checked={d.is_billable} onChange={(ev) => form.setData('is_billable', ev.target.checked)} />
                             <Checkbox label="Reimbursed" checked={d.is_reimbursed} onChange={(ev) => form.setData('is_reimbursed', ev.target.checked)} />
                         </div>
+                        <CustomFieldInputs fields={customFields} values={d.custom_values} onChange={(v) => form.setData('custom_values', v)} errors={e} className="border-t border-slate-100 pt-5 sm:col-span-2 md:grid-cols-2" />
                     </CardBody>
                 </Card>
 

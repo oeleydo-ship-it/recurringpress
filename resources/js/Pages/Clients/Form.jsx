@@ -1,12 +1,16 @@
 import { useForm } from '@inertiajs/react';
 import { Save } from 'lucide-react';
 import ClientFields, { emptyClient } from '@/Components/ClientFields';
+import { CustomFieldInputs, initialCustomValues } from '@/Components/CustomFields';
 import { Button, Card, CardBody, CardFooter, PageHeader, Switch } from '@/Components/ui';
 import { route } from '@/lib/route';
 
-export default function ClientForm({ client }) {
+export default function ClientForm({ client, customFields = [] }) {
     const editing = Boolean(client);
-    const form = useForm(editing ? { ...emptyClient, ...nullsToEmpty(client) } : { ...emptyClient });
+    const form = useForm({
+        ...(editing ? { ...emptyClient, ...nullsToEmpty(client) } : emptyClient),
+        custom_values: initialCustomValues(customFields, client?.custom_values),
+    });
 
     const submit = (e) => {
         e.preventDefault();
@@ -21,6 +25,12 @@ export default function ClientForm({ client }) {
                 <Card>
                     <CardBody className="space-y-6">
                         <ClientFields data={form.data} setData={form.setData} errors={form.errors} />
+                        {customFields.length ? (
+                            <div className="border-t border-slate-100 pt-6">
+                                <h3 className="mb-4 text-sm font-semibold text-slate-900">Additional details</h3>
+                                <CustomFieldInputs fields={customFields} values={form.data.custom_values} onChange={(v) => form.setData('custom_values', v)} errors={form.errors} />
+                            </div>
+                        ) : null}
                         {editing ? (
                             <div className="border-t border-slate-100 pt-6">
                                 <Switch

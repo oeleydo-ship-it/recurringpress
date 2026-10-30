@@ -20,10 +20,11 @@ import {
     TR,
     useConfirm,
 } from '@/Components/ui';
+import { CustomFieldValues } from '@/Components/CustomFields';
 import { route } from '@/lib/route';
 import { formatDate, formatMoney } from '@/lib/utils';
 
-export default function ClientShow({ client, invoices, stats }) {
+export default function ClientShow({ client, invoices, stats, customFields = [] }) {
     const { auth } = usePage().props;
     const currency = auth.company?.currency;
     const df = auth.company?.date_format;
@@ -89,6 +90,7 @@ export default function ClientShow({ client, invoices, stats }) {
                             </DescriptionItem>
                         ) : null}
                     </dl>
+                    <CustomFieldValues fields={customFields} values={client.custom_values} className="border-t border-slate-100 p-5 sm:grid-cols-1" />
                 </Card>
 
                 <Card className="lg:col-span-2">

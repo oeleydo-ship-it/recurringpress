@@ -3,11 +3,13 @@ import { FormField, Input, Select, Switch } from '@/Components/ui';
 import { route } from '@/lib/route';
 import { today } from '@/lib/utils';
 
-export default function RecurringForm({ recurring, selectedClientId, clients, products, units, billingCycles, defaults }) {
+export default function RecurringForm({ recurring, selectedClientId, clients, products, units, billingCycles, defaults, customFields, clientCustomFields }) {
     const editing = Boolean(recurring);
 
     return (
         <DocumentEditor
+            customFields={customFields}
+            clientCustomFields={clientCustomFields}
             title={editing ? `Edit ${recurring.name}` : 'New recurring invoice'}
             back={editing ? route('recurring-invoices.show', recurring.id) : route('recurring-invoices.index')}
             doc={recurring}

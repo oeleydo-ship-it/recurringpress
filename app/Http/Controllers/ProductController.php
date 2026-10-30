@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use App\Support\CustomFields;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -37,6 +38,7 @@ class ProductController extends Controller
             'products' => $products->through(fn (Product $p) => $this->payload($p)),
             'filters' => $request->only('search', 'status', 'type'),
             'units' => Product::units(),
+            'customColumns' => CustomFields::listColumns('product'),
         ]);
     }
 
@@ -53,6 +55,7 @@ class ProductController extends Controller
             'product' => null,
             'units' => Product::units(),
             'billingCycles' => Product::billingCycles(),
+            'customFields' => CustomFields::forForm('product'),
         ]);
     }
 
@@ -65,7 +68,8 @@ class ProductController extends Controller
                 ->with('error', 'You have reached your product limit. Please upgrade your subscription plan to add more products.');
         }
 
-        $validated = $this->validated($request);
+        [$validated, $custom] = CustomFields::validateWith($request, 'product', fn () => $this->validated($request));
+        $validated['custom_values'] = $custom ?: null;
         $validated['company_id'] = auth()->user()->company_id;
 
         Product::create($validated);
@@ -85,6 +89,7 @@ class ProductController extends Controller
                 'quantity_sold' => (float) $product->invoiceItems()->sum('quantity'),
                 'revenue' => (float) $product->invoiceItems()->sum(DB::raw('quantity * price')),
             ],
+            'customFields' => CustomFields::forForm('product'),
         ]);
     }
 
@@ -94,12 +99,15 @@ class ProductController extends Controller
             'product' => $this->payload($product),
             'units' => Product::units(),
             'billingCycles' => Product::billingCycles(),
+            'customFields' => CustomFields::forForm('product'),
         ]);
     }
 
     public function update(Request $request, Product $product)
     {
-        $product->update($this->validated($request, true));
+        [$validated, $custom] = CustomFields::validateWith($request, 'product', fn () => $this->validated($request, true), $product->custom_values);
+        $validated['custom_values'] = $custom ?: null;
+        $product->update($validated);
 
         return redirect()->route('products.index')
             ->with('success', 'Product updated successfully.');
@@ -193,6 +201,7 @@ class ProductController extends Controller
             'has_trial' => (bool) $p->has_trial,
             'trial_days' => $p->trial_days,
             'auto_renew' => $p->auto_renew === null ? true : (bool) $p->auto_renew,
+            'custom_values' => $p->custom_values,
         ];
     }
 }

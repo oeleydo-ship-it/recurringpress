@@ -22,10 +22,11 @@ import {
     useConfirm,
     useFilters,
 } from '@/Components/ui';
+import { CustomCell } from '@/Components/CustomFields';
 import { route } from '@/lib/route';
 import { formatDate, formatMoney } from '@/lib/utils';
 
-export default function ExpensesIndex({ expenses, filters: initial, categories, totals, byCategory }) {
+export default function ExpensesIndex({ expenses, filters: initial, categories, totals, byCategory, customColumns = [] }) {
     const { auth } = usePage().props;
     const currency = auth.company?.currency;
     const df = auth.company?.date_format;
@@ -74,6 +75,11 @@ export default function ExpensesIndex({ expenses, filters: initial, categories, 
                                     <TH>Expense</TH>
                                     <TH className="hidden md:table-cell">Category</TH>
                                     <TH className="hidden sm:table-cell">Date</TH>
+                                    {customColumns.map((f) => (
+                                        <TH key={f.key} className="hidden lg:table-cell">
+                                            {f.label}
+                                        </TH>
+                                    ))}
                                     <TH align="right">Amount</TH>
                                     <TH className="w-10" />
                                 </THead>
@@ -95,6 +101,11 @@ export default function ExpensesIndex({ expenses, filters: initial, categories, 
                                                 <Badge tone="gray">{e.category_label}</Badge>
                                             </TD>
                                             <TD className="hidden text-slate-500 sm:table-cell">{formatDate(e.expense_date, df)}</TD>
+                                            {customColumns.map((f) => (
+                                                <TD key={f.key} className="hidden max-w-48 truncate lg:table-cell">
+                                                    <CustomCell field={f} values={e.custom_values} />
+                                                </TD>
+                                            ))}
                                             <TD align="right">
                                                 <span className="font-medium text-slate-900 tabular-nums">{formatMoney(e.total, currency)}</span>
                                                 {e.tax_amount > 0 ? <span className="block text-xs text-slate-500">incl. {formatMoney(e.tax_amount, currency)} tax</span> : null}

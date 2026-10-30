@@ -21,6 +21,7 @@ import {
     useConfirm,
     useFilters,
 } from '@/Components/ui';
+import { CustomCell } from '@/Components/CustomFields';
 import { route } from '@/lib/route';
 import { formatDate, formatMoney } from '@/lib/utils';
 
@@ -34,7 +35,7 @@ const TABS = [
     ['converted', 'Converted'],
 ];
 
-export default function QuotationsIndex({ quotations, filters: initial, counts, summary }) {
+export default function QuotationsIndex({ quotations, filters: initial, counts, summary, customColumns = [] }) {
     const { auth } = usePage().props;
     const currency = auth.company?.currency;
     const df = auth.company?.date_format;
@@ -93,6 +94,11 @@ export default function QuotationsIndex({ quotations, filters: initial, counts, 
                                 <TH className="hidden md:table-cell">Issued</TH>
                                 <TH className="hidden md:table-cell">Valid until</TH>
                                 <TH>Status</TH>
+                                {customColumns.map((f) => (
+                                    <TH key={f.key} className="hidden lg:table-cell">
+                                        {f.label}
+                                    </TH>
+                                ))}
                                 <TH align="right">Amount</TH>
                                 <TH className="w-10" />
                             </THead>
@@ -111,6 +117,11 @@ export default function QuotationsIndex({ quotations, filters: initial, counts, 
                                                 {q.viewed && q.status === 'sent' ? <Badge tone="purple">Viewed</Badge> : null}
                                             </div>
                                         </TD>
+                                        {customColumns.map((f) => (
+                                            <TD key={f.key} className="hidden max-w-48 truncate lg:table-cell">
+                                                <CustomCell field={f} values={q.custom_values} />
+                                            </TD>
+                                        ))}
                                         <TD align="right" className="font-medium text-slate-900 tabular-nums">
                                             {formatMoney(q.total, currency)}
                                         </TD>

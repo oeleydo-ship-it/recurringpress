@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Expense;
 use App\Models\Invoice;
 use App\Services\TenantNotifier;
+use App\Support\CustomFields;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -61,6 +62,7 @@ class ExpenseController extends Controller
             'categories' => Expense::categories(),
             'totals' => $totals,
             'byCategory' => $byCategory,
+            'customColumns' => CustomFields::listColumns('expense'),
         ]);
     }
 
@@ -71,7 +73,8 @@ class ExpenseController extends Controller
 
     public function store(Request $request)
     {
-        $validated = $this->validated($request);
+        [$validated, $custom] = CustomFields::validateWith($request, 'expense', fn () => $this->validated($request));
+        $validated['custom_values'] = $custom ?: null;
 
         if ($request->hasFile('receipt')) {
             $validated['receipt_path'] = $request->file('receipt')->store('expenses', self::RECEIPT_DISK);
@@ -118,6 +121,7 @@ class ExpenseController extends Controller
                 'receipt_is_pdf' => $expense->receipt_path && str_ends_with(strtolower($expense->receipt_path), '.pdf'),
             ],
             'paymentMethods' => Expense::paymentMethods(),
+            'customFields' => CustomFields::forForm('expense'),
         ]);
     }
 
@@ -141,6 +145,7 @@ class ExpenseController extends Controller
                 'is_reimbursed' => (bool) $expense->is_reimbursed,
                 'has_receipt' => (bool) $expense->receipt_path,
                 'receipt_url' => $expense->receipt_path ? route('expenses.receipt', $expense) : null,
+                'custom_values' => $expense->custom_values,
             ],
             ...$this->formOptions(),
         ]);
@@ -148,7 +153,8 @@ class ExpenseController extends Controller
 
     public function update(Request $request, Expense $expense)
     {
-        $validated = $this->validated($request);
+        [$validated, $custom] = CustomFields::validateWith($request, 'expense', fn () => $this->validated($request), $expense->custom_values);
+        $validated['custom_values'] = $custom ?: null;
 
         if ($request->hasFile('receipt')) {
             $this->deleteReceipt($expense);
@@ -249,6 +255,7 @@ class ExpenseController extends Controller
         return [
             'categories' => Expense::categories(),
             'paymentMethods' => Expense::paymentMethods(),
+            'customFields' => CustomFields::forForm('expense'),
             'invoices' => Invoice::with('client:id,name,company_name,client_type')->orderByDesc('id')->limit(200)->get(['id', 'invoice_number', 'client_id'])
                 ->map(fn ($i) => ['id' => $i->id, 'label' => $i->invoice_number, 'sublabel' => $i->client?->bill_to_name]),
         ];
@@ -273,6 +280,7 @@ class ExpenseController extends Controller
             'has_receipt' => (bool) $e->receipt_path,
             'invoice_id' => $e->invoice_id,
             'invoice_number' => $e->invoice?->invoice_number,
+            'custom_values' => $e->custom_values,
         ];
     }
 }

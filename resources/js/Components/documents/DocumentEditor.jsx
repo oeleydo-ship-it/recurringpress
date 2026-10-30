@@ -2,6 +2,7 @@ import { useForm, usePage } from '@inertiajs/react';
 import { Save, Send, UserPlus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import LineItemWriter from '@/Components/ai/LineItemWriter';
+import { CustomFieldsCard, initialCustomValues } from '@/Components/CustomFields';
 import LineItemsEditor from '@/Components/documents/LineItemsEditor';
 import QuickAddClient from '@/Components/documents/QuickAddClient';
 import TotalsPanel from '@/Components/documents/TotalsPanel';
@@ -15,6 +16,7 @@ import { Button, Card, CardBody, CardHeader, Combobox, FormField, Input, PageHea
  * - `initialData`: form fields (without items/discount/notes, which are handled here)
  * - `renderHeader({ form, setIssueDate })`: document-specific header fields
  * - `onSubmit(form, { sendNow })`: performs the Inertia request
+ * - `customFields`: tenant-defined fields for this document type (saved as `custom_values`)
  */
 export default function DocumentEditor({
     title,
@@ -31,6 +33,8 @@ export default function DocumentEditor({
     sendable = true,
     sendLabel = 'Save & send',
     saveLabel,
+    customFields = [],
+    clientCustomFields = [],
 }) {
     const { auth } = usePage().props;
     const currency = auth.company?.currency;
@@ -45,6 +49,7 @@ export default function DocumentEditor({
         discount_amount: doc?.discount_amount || '',
         discount_type: doc?.discount_type ?? 'fixed',
         items: doc?.items?.length ? withKeys(doc.items) : [blankItem(defaults)],
+        custom_values: initialCustomValues(customFields, doc?.custom_values),
         ...initialData,
     });
     const d = form.data;
@@ -119,6 +124,8 @@ export default function DocumentEditor({
                             </FormField>
                         </CardBody>
                     </Card>
+
+                    <CustomFieldsCard fields={customFields} values={d.custom_values} onChange={(v) => form.setData('custom_values', v)} errors={form.errors} />
                 </div>
 
                 <div className="space-y-6 md:ml-auto md:w-96 2xl:ml-0 2xl:w-auto">
@@ -143,6 +150,7 @@ export default function DocumentEditor({
             </form>
 
             <QuickAddClient
+                customFields={clientCustomFields}
                 open={quickAdd.open}
                 initialName={quickAdd.name}
                 onClose={() => setQuickAdd({ open: false, name: '' })}

@@ -3,11 +3,13 @@ import { FormField, Input } from '@/Components/ui';
 import { route } from '@/lib/route';
 import { today } from '@/lib/utils';
 
-export default function InvoiceForm({ invoice, nextNumber, selectedClientId, clients, products, units, defaults }) {
+export default function InvoiceForm({ invoice, nextNumber, selectedClientId, clients, products, units, defaults, customFields, clientCustomFields }) {
     const editing = Boolean(invoice);
 
     return (
         <DocumentEditor
+            customFields={customFields}
+            clientCustomFields={clientCustomFields}
             title={editing ? `Edit ${invoice.invoice_number}` : 'New invoice'}
             back={editing ? route('invoices.show', invoice.id) : route('invoices.index')}
             doc={invoice}

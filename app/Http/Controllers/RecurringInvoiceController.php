@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Client;
 use App\Models\Product;
 use App\Models\RecurringInvoice;
+use App\Support\CustomFields;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -40,7 +41,8 @@ class RecurringInvoiceController extends Controller
             ->sum(fn ($r) => (float) $r->total * ($perMonth[$r->billing_cycle] ?? 1));
 
         return Inertia::render('RecurringInvoices/Index', [
-            'recurring' => $recurring->through(fn (RecurringInvoice $r) => $this->row($r)),
+            'recurring' => $recurring->through(fn (RecurringInvoice $r) => [...$this->row($r), 'custom_values' => $r->custom_values]),
+            'customColumns' => CustomFields::listColumns('recurring_invoice'),
             'filters' => $request->only('search', 'status', 'client_id'),
             'statuses' => RecurringInvoice::statuses(),
             'billingCycles' => RecurringInvoice::billingCycles(),
@@ -60,9 +62,9 @@ class RecurringInvoiceController extends Controller
 
     public function store(Request $request)
     {
-        $validated = $this->validateRecurring($request);
+        [$validated, $custom] = CustomFields::validateWith($request, 'recurring_invoice', fn () => $this->validateRecurring($request));
 
-        $recurringInvoice = DB::transaction(function () use ($validated, $request) {
+        $recurringInvoice = DB::transaction(function () use ($validated, $custom, $request) {
             $recurringInvoice = RecurringInvoice::create([
                 'company_id' => auth()->user()->company_id,
                 'client_id' => $validated['client_id'],
@@ -78,6 +80,7 @@ class RecurringInvoiceController extends Controller
                 'discount_amount' => $validated['discount_amount'] ?? 0,
                 'discount_type' => $validated['discount_type'] ?? 'fixed',
                 'auto_send' => $request->boolean('auto_send'),
+                'custom_values' => $custom ?: null,
                 'status' => 'active',
             ]);
 
@@ -108,6 +111,7 @@ class RecurringInvoiceController extends Controller
                 'notes' => $recurringInvoice->notes,
                 'terms' => $recurringInvoice->terms,
                 'created_by' => $recurringInvoice->creator?->name,
+                'custom_values' => $recurringInvoice->custom_values,
                 'client' => $recurringInvoice->client ? [
                     'id' => $recurringInvoice->client->id,
                     'name' => $recurringInvoice->client->bill_to_name,
@@ -132,6 +136,7 @@ class RecurringInvoiceController extends Controller
                 'total' => (float) $i->total,
                 'status' => $i->status,
             ]),
+            'customFields' => CustomFields::forForm('recurring_invoice'),
         ]);
     }
 
@@ -157,6 +162,7 @@ class RecurringInvoiceController extends Controller
                 'terms' => $recurringInvoice->terms,
                 'discount_amount' => (float) $recurringInvoice->discount_amount,
                 'discount_type' => $recurringInvoice->discount_type ?? 'fixed',
+                'custom_values' => $recurringInvoice->custom_values,
                 'items' => $recurringInvoice->items->map(fn ($i) => [
                     'product_id' => $i->product_id,
                     'name' => $i->name,
@@ -178,9 +184,9 @@ class RecurringInvoiceController extends Controller
             return back()->with('error', 'Cannot update a cancelled recurring invoice.');
         }
 
-        $validated = $this->validateRecurring($request, $recurringInvoice);
+        [$validated, $custom] = CustomFields::validateWith($request, 'recurring_invoice', fn () => $this->validateRecurring($request, $recurringInvoice), $recurringInvoice->custom_values);
 
-        DB::transaction(function () use ($validated, $request, $recurringInvoice) {
+        DB::transaction(function () use ($validated, $custom, $request, $recurringInvoice) {
             $recurringInvoice->update([
                 'client_id' => $validated['client_id'],
                 'name' => $validated['name'],
@@ -192,6 +198,7 @@ class RecurringInvoiceController extends Controller
                 'discount_amount' => $validated['discount_amount'] ?? 0,
                 'discount_type' => $validated['discount_type'] ?? 'fixed',
                 'auto_send' => $request->boolean('auto_send'),
+                'custom_values' => $custom ?: null,
             ]);
 
             $recurringInvoice->items()->delete();
@@ -320,6 +327,8 @@ class RecurringInvoiceController extends Controller
                 ]),
             'units' => Product::units(),
             'billingCycles' => RecurringInvoice::billingCycles(),
+            'customFields' => CustomFields::forForm('recurring_invoice'),
+            'clientCustomFields' => CustomFields::forForm('client'),
             'defaults' => [
                 'notes' => $settings->default_notes ?? '',
                 'terms' => $settings->default_terms ?? '',

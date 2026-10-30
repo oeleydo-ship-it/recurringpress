@@ -165,6 +165,7 @@
         @if ($invoice->notes)<div class="note-block"><div class="section-title">Notes</div><div class="note-text">{{ $invoice->notes }}</div></div>@endif
         @if ($invoice->terms)<div class="note-block"><div class="section-title">Terms &amp; conditions</div><div class="note-text">{{ $invoice->terms }}</div></div>@endif
     </div>@endif
+    @include('invoices.pdf.partials.custom-fields', ['doc' => $invoice, 'entity' => 'invoice'])
     @include('invoices.pdf.partials.signature')
     @if ($settings->show_invoice_footer ?? true)<div class="footer">{{ $seller->invoice_footer ?: 'Thank you for your business.' }}</div>@endif
 </div>

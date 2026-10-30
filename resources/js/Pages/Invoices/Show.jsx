@@ -3,12 +3,13 @@ import { Banknote, Check, CheckCircle2, Copy, Download, ExternalLink, Link2, Mai
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import ReminderModal from '@/Components/ai/ReminderModal';
+import { CustomFieldValuesCard } from '@/Components/CustomFields';
 import DocumentPreview from '@/Components/documents/DocumentPreview';
 import { Badge, Button, Card, CardHeader, Dropdown, FormField, Input, Modal, PageHeader, Select, StatusBadge, Textarea, useConfirm } from '@/Components/ui';
 import { route } from '@/lib/route';
 import { cn, formatDate, formatDateTime, formatMoney, titleCase, today } from '@/lib/utils';
 
-export default function InvoiceShow({ invoice, payments, paymentMethods }) {
+export default function InvoiceShow({ invoice, payments, paymentMethods, customFields = [] }) {
     const { auth } = usePage().props;
     const currency = auth.company?.currency;
     const df = auth.company?.date_format;
@@ -139,6 +140,8 @@ export default function InvoiceShow({ invoice, payments, paymentMethods }) {
                             ) : null}
                         </dl>
                     </Card>
+
+                    <CustomFieldValuesCard fields={customFields} values={invoice.custom_values} />
 
                     <Card>
                         <CardHeader title="Payment link" description="Clients can view and pay online." icon={Link2} />

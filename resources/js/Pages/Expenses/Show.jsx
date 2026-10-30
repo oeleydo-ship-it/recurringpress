@@ -1,10 +1,11 @@
 import { Link, router, usePage } from '@inertiajs/react';
 import { ExternalLink, FileText, Pencil, Trash2 } from 'lucide-react';
 import { Badge, Button, Card, CardHeader, DescriptionItem, Dropdown, PageHeader, useConfirm } from '@/Components/ui';
+import { CustomFieldValues } from '@/Components/CustomFields';
 import { route } from '@/lib/route';
 import { formatDate, formatDateTime, formatMoney } from '@/lib/utils';
 
-export default function ExpenseShow({ expense: e, paymentMethods }) {
+export default function ExpenseShow({ expense: e, paymentMethods, customFields = [] }) {
     const { auth } = usePage().props;
     const currency = auth.company?.currency;
     const confirm = useConfirm();
@@ -64,6 +65,7 @@ export default function ExpenseShow({ expense: e, paymentMethods }) {
                             </DescriptionItem>
                         ) : null}
                     </dl>
+                    <CustomFieldValues fields={customFields} values={e.custom_values} className="border-t border-slate-100 p-6" />
                 </Card>
                 <Card className="h-fit overflow-hidden">
                     <CardHeader

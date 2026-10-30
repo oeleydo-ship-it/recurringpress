@@ -319,6 +319,7 @@
             </div>
         </div>
 
+        @include('invoices.pdf.partials.custom-fields', ['doc' => $invoice, 'entity' => 'invoice'])
         @include('invoices.pdf.partials.signature')
 
         @if($invoice->company->settings->show_invoice_footer ?? true)

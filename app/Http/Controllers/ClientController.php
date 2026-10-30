@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Client;
+use App\Support\CustomFields;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
@@ -49,14 +50,16 @@ class ClientController extends Controller
                 'is_active' => (bool) ($c->is_active ?? true),
                 'invoices_count' => $c->invoices_count,
                 'total_billed' => (float) $c->total_billed,
+                'custom_values' => $c->custom_values,
             ]),
             'filters' => $request->only('search', 'status'),
+            'customColumns' => CustomFields::listColumns('client'),
         ]);
     }
 
     public function create()
     {
-        return Inertia::render('Clients/Form', ['client' => null]);
+        return Inertia::render('Clients/Form', ['client' => null, 'customFields' => CustomFields::forForm('client')]);
     }
 
     public function store(Request $request)
@@ -71,7 +74,7 @@ class ClientController extends Controller
 
         $request->merge(['client_type' => $request->input('client_type', 'individual')]);
 
-        $validated = $request->validate([
+        [$validated, $custom] = CustomFields::validateWith($request, 'client', fn () => $request->validate([
             'name' => 'required|string|max:255',
             'client_type' => 'required|in:individual,company',
             'company_name' => 'required_if:client_type,company|nullable|string|max:255',
@@ -84,7 +87,8 @@ class ClientController extends Controller
             'postal_code' => 'nullable|string|max:20',
             'country' => 'nullable|string|max:100',
             'notes' => 'nullable|string|max:1000',
-        ]);
+        ]));
+        $validated['custom_values'] = $custom ?: null;
 
         if ($validated['client_type'] === 'individual') {
             $validated['company_name'] = null;
@@ -135,17 +139,18 @@ class ClientController extends Controller
                 'status' => $i->status,
             ]),
             'stats' => $stats,
+            'customFields' => CustomFields::forForm('client'),
         ]);
     }
 
     public function edit(Client $client)
     {
-        return Inertia::render('Clients/Form', ['client' => $this->clientPayload($client)]);
+        return Inertia::render('Clients/Form', ['client' => $this->clientPayload($client), 'customFields' => CustomFields::forForm('client')]);
     }
 
     public function update(Request $request, Client $client)
     {
-        $validated = $request->validate([
+        [$validated, $custom] = CustomFields::validateWith($request, 'client', fn () => $request->validate([
             'name' => 'required|string|max:255',
             'client_type' => 'required|in:individual,company',
             'company_name' => 'required_if:client_type,company|nullable|string|max:255',
@@ -159,7 +164,8 @@ class ClientController extends Controller
             'country' => 'nullable|string|max:100',
             'notes' => 'nullable|string|max:1000',
             'is_active' => 'boolean',
-        ]);
+        ]), $client->custom_values);
+        $validated['custom_values'] = $custom ?: null;
 
         if ($validated['client_type'] === 'individual') {
             $validated['company_name'] = null;
@@ -187,6 +193,6 @@ class ClientController extends Controller
         return $client->only([
             'id', 'name', 'client_type', 'company_name', 'email', 'phone', 'tax_number',
             'address', 'city', 'state', 'postal_code', 'country', 'notes',
-        ]) + ['is_active' => (bool) ($client->is_active ?? true)];
+        ]) + ['is_active' => (bool) ($client->is_active ?? true), 'custom_values' => $client->custom_values];
     }
 }

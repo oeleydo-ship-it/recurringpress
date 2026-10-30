@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Builder;
 class Client extends Model
 {
     use HasFactory;
+    use \App\Models\Concerns\HasCustomValues;
     use \App\Models\Concerns\EnforcesPlanQuota;
 
     protected $fillable = [

@@ -22,6 +22,7 @@ import {
     useConfirm,
     useFilters,
 } from '@/Components/ui';
+import { CustomCell } from '@/Components/CustomFields';
 import { route } from '@/lib/route';
 import { cn, formatDate, formatMoney } from '@/lib/utils';
 
@@ -34,7 +35,7 @@ const TABS = [
     ['paid', 'Paid'],
 ];
 
-export default function InvoicesIndex({ invoices, filters: initial, counts, clients, summary }) {
+export default function InvoicesIndex({ invoices, filters: initial, counts, clients, summary, customColumns = [] }) {
     const { auth } = usePage().props;
     const currency = auth.company?.currency;
     const df = auth.company?.date_format;
@@ -119,6 +120,11 @@ export default function InvoicesIndex({ invoices, filters: initial, counts, clie
                                 <TH className="hidden md:table-cell">Issued</TH>
                                 <TH className="hidden md:table-cell">Due</TH>
                                 <TH>Status</TH>
+                                {customColumns.map((f) => (
+                                    <TH key={f.key} className="hidden lg:table-cell">
+                                        {f.label}
+                                    </TH>
+                                ))}
                                 <TH align="right">Amount</TH>
                                 <TH className="w-10" />
                             </THead>
@@ -134,6 +140,11 @@ export default function InvoicesIndex({ invoices, filters: initial, counts, clie
                                         <TD>
                                             <StatusBadge status={inv.is_overdue && inv.status !== 'overdue' ? 'overdue' : inv.status} />
                                         </TD>
+                                        {customColumns.map((f) => (
+                                            <TD key={f.key} className="hidden max-w-48 truncate lg:table-cell">
+                                                <CustomCell field={f} values={inv.custom_values} />
+                                            </TD>
+                                        ))}
                                         <TD align="right">
                                             <span className="font-medium text-slate-900 tabular-nums">{formatMoney(inv.total, currency)}</span>
                                             {inv.balance > 0 && inv.balance < inv.total ? <span className="block text-xs text-slate-500">{formatMoney(inv.balance, currency)} due</span> : null}

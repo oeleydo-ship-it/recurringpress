@@ -1,6 +1,7 @@
 import { useForm, usePage } from '@inertiajs/react';
 import { Download, Package, Save, Wrench } from 'lucide-react';
 import { Button, Card, CardBody, CardFooter, CardHeader, FormField, Input, PageHeader, Select, Switch, Textarea } from '@/Components/ui';
+import { CustomFieldsCard, initialCustomValues } from '@/Components/CustomFields';
 import { route } from '@/lib/route';
 import { cn } from '@/lib/utils';
 
@@ -10,7 +11,7 @@ const types = [
     { value: 'digital', label: 'Digital', description: 'Downloads, licences, access', icon: Download },
 ];
 
-export default function ProductForm({ product, units, billingCycles }) {
+export default function ProductForm({ product, units, billingCycles, customFields = [] }) {
     const { auth } = usePage().props;
     const editing = Boolean(product);
     const form = useForm({
@@ -31,6 +32,7 @@ export default function ProductForm({ product, units, billingCycles }) {
         has_trial: product?.has_trial ?? false,
         trial_days: product?.trial_days ?? 14,
         auto_renew: product?.auto_renew ?? true,
+        custom_values: initialCustomValues(customFields, product?.custom_values),
     });
     const d = form.data;
     const e = form.errors;
@@ -129,6 +131,8 @@ export default function ProductForm({ product, units, billingCycles }) {
                             ) : null}
                         </CardBody>
                     </Card>
+
+                    <CustomFieldsCard fields={customFields} values={d.custom_values} onChange={(v) => form.setData('custom_values', v)} errors={e} />
                 </div>
 
                 <div className="space-y-6">

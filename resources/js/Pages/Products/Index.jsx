@@ -20,6 +20,7 @@ import {
     useConfirm,
     useFilters,
 } from '@/Components/ui';
+import { CustomCell } from '@/Components/CustomFields';
 import { route } from '@/lib/route';
 import { formatMoney } from '@/lib/utils';
 
@@ -29,7 +30,7 @@ export const typeMeta = {
     digital: { label: 'Digital', icon: Download, tone: 'purple' },
 };
 
-export default function ProductsIndex({ products, filters: initial, units }) {
+export default function ProductsIndex({ products, filters: initial, units, customColumns = [] }) {
     const { auth } = usePage().props;
     const currency = auth.company?.currency;
     const confirm = useConfirm();
@@ -68,6 +69,11 @@ export default function ProductsIndex({ products, filters: initial, units }) {
                                 <TH>Product</TH>
                                 <TH className="hidden md:table-cell">Type</TH>
                                 <TH className="hidden lg:table-cell">SKU</TH>
+                                {customColumns.map((f) => (
+                                    <TH key={f.key} className="hidden lg:table-cell">
+                                        {f.label}
+                                    </TH>
+                                ))}
                                 <TH className="hidden sm:table-cell" align="right">
                                     Tax
                                 </TH>
@@ -107,6 +113,11 @@ export default function ProductsIndex({ products, filters: initial, units }) {
                                                 <Badge tone={meta.tone}>{meta.label}</Badge>
                                             </TD>
                                             <TD className="hidden font-mono text-xs text-slate-500 lg:table-cell">{p.sku || '—'}</TD>
+                                            {customColumns.map((f) => (
+                                                <TD key={f.key} className="hidden max-w-48 truncate lg:table-cell">
+                                                    <CustomCell field={f} values={p.custom_values} />
+                                                </TD>
+                                            ))}
                                             <TD className="hidden sm:table-cell" align="right">
                                                 {p.tax_rate ? `${p.tax_rate}%` : '—'}
                                             </TD>

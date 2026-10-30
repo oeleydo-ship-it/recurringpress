@@ -58,6 +58,7 @@ class SettingsController extends Controller
                 'timezones' => \DateTimeZone::listIdentifiers(),
             ],
             'webhookUrl' => route('stripe.webhook'),
+            'customFields' => CustomFieldController::payload(),
             'domain' => $this->domainPayload($settings),
             'smtp' => [
                 ...$settings->only(['smtp_enabled', 'smtp_host', 'smtp_port', 'smtp_encryption', 'smtp_username', 'smtp_from_address', 'smtp_from_name', 'smtp_last_error']),

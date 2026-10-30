@@ -9,6 +9,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Receipt;
+use App\Support\CustomFields;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -26,7 +27,8 @@ class InvoiceController extends Controller
         $counts = Invoice::select('status', DB::raw('count(*) as c'))->groupBy('status')->pluck('c', 'status');
 
         return Inertia::render('Invoices/Index', [
-            'invoices' => $invoices->through(fn (Invoice $i) => $this->listRow($i)),
+            'invoices' => $invoices->through(fn (Invoice $i) => [...$this->listRow($i), 'custom_values' => $i->custom_values]),
+            'customColumns' => CustomFields::listColumns('invoice'),
             'filters' => $request->only('search', 'status', 'client_id', 'date_from', 'date_to'),
             'statuses' => Invoice::statuses(),
             'counts' => $counts,
@@ -43,12 +45,13 @@ class InvoiceController extends Controller
     public function export(Request $request)
     {
         $invoices = $this->filtered($request)->with('client')->latest()->get();
+        $fields = CustomFields::definitions('invoice');
 
         $filename = 'invoices-' . now()->format('Y-m-d-His') . '.csv';
 
-        return response()->stream(function () use ($invoices) {
+        return response()->stream(function () use ($invoices, $fields) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['Invoice Number', 'Client', 'Issue Date', 'Due Date', 'Total', 'Paid Amount', 'Balance Due', 'Payment Status', 'Status']);
+            fputcsv($handle, ['Invoice Number', 'Client', 'Issue Date', 'Due Date', 'Total', 'Paid Amount', 'Balance Due', 'Payment Status', 'Status', ...$fields->pluck('label')]);
 
             foreach ($invoices as $invoice) {
                 fputcsv($handle, array_map([$this, 'csvSafe'], [
@@ -61,6 +64,7 @@ class InvoiceController extends Controller
                     number_format(max(0, $invoice->total - $invoice->paid_amount), 2, '.', ''),
                     $invoice->isFullyPaid() ? 'Paid' : 'Unpaid',
                     ucfirst($invoice->status),
+                    ...CustomFields::csvRow($fields, $invoice->custom_values),
                 ]));
             }
 
@@ -90,9 +94,9 @@ class InvoiceController extends Controller
             return back()->with('error', 'You have reached the invoice limit for your current plan. Please upgrade to create more invoices.');
         }
 
-        $validated = $this->validateInvoice($request);
+        [$validated, $custom] = CustomFields::validateWith($request, 'invoice', fn () => $this->validateInvoice($request));
 
-        $invoice = DB::transaction(function () use ($validated) {
+        $invoice = DB::transaction(function () use ($validated, $custom) {
             $invoice = Invoice::create([
                 'company_id' => auth()->user()->company_id,
                 'client_id' => $validated['client_id'],
@@ -105,6 +109,7 @@ class InvoiceController extends Controller
                 'terms' => $validated['terms'] ?? null,
                 'discount_amount' => $validated['discount_amount'] ?? 0,
                 'discount_type' => $validated['discount_type'] ?? 'fixed',
+                'custom_values' => $custom ?: null,
                 'status' => 'draft',
             ]);
 
@@ -149,6 +154,7 @@ class InvoiceController extends Controller
                 'share_url' => $invoice->share_url,
                 'is_recurring' => $invoice->isFromRecurring(),
                 'recurring_invoice_id' => $invoice->recurring_invoice_id,
+                'custom_values' => $invoice->custom_values,
                 'client' => $invoice->client ? [
                     'id' => $invoice->client->id,
                     'name' => $invoice->client->bill_to_name,
@@ -176,6 +182,7 @@ class InvoiceController extends Controller
                 'receipt_id' => $receipts[$p->id] ?? null,
             ]),
             'paymentMethods' => $this->manualPaymentMethods(),
+            'customFields' => CustomFields::forForm('invoice'),
         ]);
     }
 
@@ -211,6 +218,7 @@ class InvoiceController extends Controller
                 'discount_amount' => (float) $invoice->discount_amount,
                 'discount_type' => $invoice->discount_type ?? 'fixed',
                 'status' => $invoice->status,
+                'custom_values' => $invoice->custom_values,
                 'items' => $invoice->items->map(fn ($i) => [
                     'product_id' => $i->product_id,
                     'name' => $i->name,
@@ -233,9 +241,9 @@ class InvoiceController extends Controller
             return back()->with('error', 'Cannot edit a paid invoice.');
         }
 
-        $validated = $this->validateInvoice($request, $invoice);
+        [$validated, $custom] = CustomFields::validateWith($request, 'invoice', fn () => $this->validateInvoice($request, $invoice), $invoice->custom_values);
 
-        DB::transaction(function () use ($invoice, $validated) {
+        DB::transaction(function () use ($invoice, $validated, $custom) {
             $invoice->update([
                 'client_id' => $validated['client_id'],
                 'reference' => $validated['reference'] ?? null,
@@ -245,6 +253,7 @@ class InvoiceController extends Controller
                 'terms' => $validated['terms'] ?? null,
                 'discount_amount' => $validated['discount_amount'] ?? 0,
                 'discount_type' => $validated['discount_type'] ?? 'fixed',
+                'custom_values' => $custom ?: null,
             ]);
 
             $invoice->items()->delete();
@@ -460,6 +469,8 @@ class InvoiceController extends Controller
                     'tax_rate' => (float) $p->tax_rate,
                 ]),
             'units' => Product::units(),
+            'customFields' => CustomFields::forForm('invoice'),
+            'clientCustomFields' => CustomFields::forForm('client'),
             'defaults' => [
                 'payment_terms' => (int) ($company->payment_terms ?: 30),
                 'notes' => $settings->default_notes ?? '',

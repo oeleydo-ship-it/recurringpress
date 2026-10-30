@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 class RecurringInvoice extends Model
 {
     use HasFactory;
+    use \App\Models\Concerns\HasCustomValues;
 
     protected $fillable = [
         'company_id',
@@ -255,6 +256,8 @@ class RecurringInvoice extends Model
             'discount_type' => $this->discount_type,
             'notes' => $this->notes,
             'terms' => $this->terms,
+            // Values carry over where the invoice defines a field with the same key.
+            'custom_values' => \App\Support\CustomFields::carryOver($this->custom_values, 'invoice', $this->company_id),
             'status' => 'draft',
         ]);
 

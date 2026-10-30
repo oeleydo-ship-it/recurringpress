@@ -14,6 +14,7 @@ use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Quotation;
 use App\Models\User;
+use App\Support\CustomFields;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -54,6 +55,9 @@ class AiTools
 
     private string $currency;
 
+    /** @var array<string, Collection> custom field definitions per entity, loaded once per turn */
+    private array $customDefs = [];
+
     public function __construct(private Company $company, private User $user)
     {
         $this->cid = $company->id;
@@ -80,6 +84,7 @@ class AiTools
             '- draft_invoice {"client": name or id, "items": [' . $item . ', ...], "issue_date"?, "due_date"?, "reference"?, "notes"?, "discount"?: number, "discount_type"?: "fixed"|"percentage"} — prepares a DRAFT invoice for the user to confirm.',
             '- draft_quotation {"client": name or id, "items": [...same as invoice], "issue_date"?, "valid_until"?, "reference"?, "notes"?, "discount"?, "discount_type"?} — prepares a DRAFT quotation for the user to confirm.',
             '- draft_expense {"title": string, "amount": number, "category": ' . $categories . ', "payment_method"?: ' . $methods . ', "expense_date"?, "vendor"?, "tax_amount"?, "reference"?, "description"?} — prepares an expense for the user to confirm.',
+            'Invoices, clients, expenses, quotations and products include "custom_fields" ({label: value}) when the company has filled in its own custom fields on them.',
         ]);
     }
 
@@ -198,6 +203,7 @@ class AiTools
             'paid' => round((float) ($stats[$c->id]->paid ?? 0), 2),
             'owed' => round((float) ($owed[$c->id] ?? 0), 2),
             'created' => $c->created_at?->toDateString(),
+            ...$this->custom('client', $c->custom_values),
             'url' => $this->link($c->bill_to_name, route('clients.show', $c->id, false)),
         ]);
 
@@ -242,6 +248,7 @@ class AiTools
                 'vendor' => $e->vendor,
                 'amount' => (float) $e->amount,
                 'tax' => (float) $e->tax_amount,
+                ...$this->custom('expense', $e->custom_values),
                 'url' => $this->link($e->expense_number, route('expenses.show', $e->id, false)),
             ])->all(),
         ];
@@ -275,6 +282,7 @@ class AiTools
                 'issued' => $x->issue_date?->toDateString(),
                 'valid_until' => $x->valid_until?->toDateString(),
                 'total' => (float) $x->total,
+                ...$this->custom('quotation', $x->custom_values),
                 'url' => $this->link($x->quotation_number, route('quotations.show', $x->id, false)),
             ])->all(),
         ];
@@ -299,6 +307,7 @@ class AiTools
                 'unit' => $p->unit,
                 'tax_rate' => (float) $p->tax_rate,
                 'active' => (bool) $p->is_active,
+                ...$this->custom('product', $p->custom_values),
             ])->all(),
         ];
     }
@@ -627,8 +636,21 @@ class AiTools
             'paid' => round((float) $i->paid_amount, 2),
             'balance' => $balance,
             'days_overdue' => in_array($i->status, self::OPEN, true) && $i->due_date?->lt(today()) ? (int) $i->due_date->diffInDays(today()) : 0,
+            ...$this->custom('invoice', $i->custom_values),
             'url' => $this->link($i->invoice_number, route('invoices.show', $i->id, false)),
         ];
+    }
+
+    /** ['custom_fields' => {label: value}] for a record with filled custom fields, else []. */
+    private function custom(string $entity, ?array $values): array
+    {
+        if (! $values) {
+            return [];
+        }
+        $this->customDefs[$entity] ??= CustomFields::definitions($entity, $this->cid);
+        $labelled = CustomFields::labelled($entity, $values, $this->cid, $this->customDefs[$entity]);
+
+        return $labelled ? ['custom_fields' => $labelled] : [];
     }
 
     private function clientFilter(array $a): ?Client

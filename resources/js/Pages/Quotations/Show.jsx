@@ -1,12 +1,13 @@
 import { Link, router, usePage } from '@inertiajs/react';
 import { ArrowRightLeft, CheckCircle2, Copy, Download, ExternalLink, Eye, Link2, Pencil, Send, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { CustomFieldValuesCard } from '@/Components/CustomFields';
 import DocumentPreview from '@/Components/documents/DocumentPreview';
 import { Button, Card, CardHeader, Dropdown, Input, PageHeader, StatusBadge, useConfirm } from '@/Components/ui';
 import { route } from '@/lib/route';
 import { cn, formatDate, formatDateTime, formatMoney } from '@/lib/utils';
 
-export default function QuotationShow({ quotation: q, can }) {
+export default function QuotationShow({ quotation: q, can, customFields = [] }) {
     const { auth } = usePage().props;
     const currency = auth.company?.currency;
     const df = auth.company?.date_format;
@@ -139,6 +140,8 @@ export default function QuotationShow({ quotation: q, can }) {
                             </div>
                         ) : null}
                     </Card>
+
+                    <CustomFieldValuesCard fields={customFields} values={q.custom_values} />
 
                     <Card>
                         <CardHeader title="Client link" description="Clients can review, accept or reject online." icon={Link2} />

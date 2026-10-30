@@ -9,6 +9,7 @@ use App\Models\InvoiceItem;
 use App\Models\Product;
 use App\Models\Quotation;
 use App\Models\QuotationItem;
+use App\Support\CustomFields;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -25,7 +26,8 @@ class QuotationController extends Controller
             ->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
 
         return Inertia::render('Quotations/Index', [
-            'quotations' => $quotations->through(fn (Quotation $q) => $this->listRow($q)),
+            'quotations' => $quotations->through(fn (Quotation $q) => [...$this->listRow($q), 'custom_values' => $q->custom_values]),
+            'customColumns' => CustomFields::listColumns('quotation'),
             'filters' => $request->only('search', 'status'),
             'counts' => Quotation::select('status', DB::raw('count(*) as c'))->groupBy('status')->pluck('c', 'status'),
             'summary' => [
@@ -39,10 +41,11 @@ class QuotationController extends Controller
     {
         $quotations = $this->filtered($request)->with('client')->orderBy('created_at', 'desc')->get();
         $filename = 'quotations-' . now()->format('Y-m-d-His') . '.csv';
+        $fields = CustomFields::definitions('quotation');
 
-        return response()->stream(function () use ($quotations) {
+        return response()->stream(function () use ($quotations, $fields) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['Quotation Number', 'Client', 'Issue Date', 'Valid Until', 'Total', 'Status']);
+            fputcsv($handle, ['Quotation Number', 'Client', 'Issue Date', 'Valid Until', 'Total', 'Status', ...$fields->pluck('label')]);
 
             foreach ($quotations as $quotation) {
                 fputcsv($handle, array_map([$this, 'csvSafe'], [
@@ -52,6 +55,7 @@ class QuotationController extends Controller
                     optional($quotation->valid_until)->format('Y-m-d'),
                     number_format($quotation->total, 2, '.', ''),
                     ucfirst($quotation->status),
+                    ...CustomFields::csvRow($fields, $quotation->custom_values),
                 ]));
             }
 
@@ -76,12 +80,12 @@ class QuotationController extends Controller
 
     public function store(Request $request)
     {
-        $validated = $this->validateQuotation($request);
+        [$validated, $custom] = CustomFields::validateWith($request, 'quotation', fn () => $this->validateQuotation($request));
         $company = auth()->user()->company;
 
         // Created together with its items and totals so a failure can't leave a
         // zero-total quotation behind.
-        $quotation = DB::transaction(function () use ($validated, $company) {
+        $quotation = DB::transaction(function () use ($validated, $custom, $company) {
             $quotation = Quotation::create([
                 'company_id' => $company->id,
                 'client_id' => $validated['client_id'],
@@ -94,6 +98,7 @@ class QuotationController extends Controller
                 'discount_type' => $validated['discount_type'] ?? 'fixed',
                 'notes' => $validated['notes'] ?? null,
                 'terms' => $validated['terms'] ?? null,
+                'custom_values' => $custom ?: null,
                 'status' => Quotation::STATUS_DRAFT,
             ]);
 
@@ -130,6 +135,7 @@ class QuotationController extends Controller
                 'created_by' => $quotation->user?->name,
                 'share_url' => $quotation->share_url,
                 'converted_invoice_id' => $quotation->converted_invoice_id,
+                'custom_values' => $quotation->custom_values,
                 'client' => $quotation->client ? [
                     'id' => $quotation->client->id,
                     'name' => $quotation->client->bill_to_name,
@@ -143,6 +149,7 @@ class QuotationController extends Controller
                 'accept' => $quotation->canTransitionTo(Quotation::STATUS_ACCEPTED),
                 'reject' => $quotation->canTransitionTo(Quotation::STATUS_REJECTED),
             ],
+            'customFields' => CustomFields::forForm('quotation'),
         ]);
     }
 
@@ -175,6 +182,7 @@ class QuotationController extends Controller
                 'terms' => $quotation->terms,
                 'discount_amount' => (float) $quotation->discount_amount,
                 'discount_type' => $quotation->discount_type ?? 'fixed',
+                'custom_values' => $quotation->custom_values,
                 'items' => $quotation->items->map(fn ($i) => [
                     'product_id' => $i->product_id,
                     'name' => $i->name,
@@ -198,10 +206,10 @@ class QuotationController extends Controller
                 ->with('error', 'Cannot update a converted quotation.');
         }
 
-        $validated = $this->validateQuotation($request, $quotation);
+        [$validated, $custom] = CustomFields::validateWith($request, 'quotation', fn () => $this->validateQuotation($request, $quotation), $quotation->custom_values);
 
         // Items are replaced wholesale, so the delete and re-insert share a transaction.
-        DB::transaction(function () use ($quotation, $validated) {
+        DB::transaction(function () use ($quotation, $validated, $custom) {
             $quotation->update([
                 'client_id' => $validated['client_id'],
                 'issue_date' => $validated['issue_date'],
@@ -211,6 +219,7 @@ class QuotationController extends Controller
                 'discount_type' => $validated['discount_type'] ?? 'fixed',
                 'notes' => $validated['notes'] ?? null,
                 'terms' => $validated['terms'] ?? null,
+                'custom_values' => $custom ?: null,
             ]);
 
             $quotation->items()->delete();
@@ -318,6 +327,8 @@ class QuotationController extends Controller
                 'discount_type' => $locked->discount_type,
                 'notes' => $locked->notes,
                 'terms' => $locked->terms,
+                // Values carry over where the invoice defines a field with the same key.
+                'custom_values' => CustomFields::carryOver($locked->custom_values, 'invoice', $company->id),
                 'status' => 'draft',
             ]);
 
@@ -446,6 +457,8 @@ class QuotationController extends Controller
                     'tax_rate' => (float) $p->tax_rate,
                 ]),
             'units' => Product::units(),
+            'customFields' => CustomFields::forForm('quotation'),
+            'clientCustomFields' => CustomFields::forForm('client'),
             'defaults' => [
                 'validity_days' => (int) ($company->quotation_validity_days ?: 30),
                 'notes' => $settings->default_notes ?? '',

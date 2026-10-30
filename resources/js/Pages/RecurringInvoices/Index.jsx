@@ -21,10 +21,11 @@ import {
     useConfirm,
     useFilters,
 } from '@/Components/ui';
+import { CustomCell } from '@/Components/CustomFields';
 import { route } from '@/lib/route';
 import { formatDate, formatMoney } from '@/lib/utils';
 
-export default function RecurringIndex({ recurring, filters: initial, statuses, billingCycles, counts, mrr }) {
+export default function RecurringIndex({ recurring, filters: initial, statuses, billingCycles, counts, mrr, customColumns = [] }) {
     const { auth } = usePage().props;
     const currency = auth.company?.currency;
     const df = auth.company?.date_format;
@@ -79,6 +80,11 @@ export default function RecurringIndex({ recurring, filters: initial, statuses, 
                                 <TH className="hidden md:table-cell">Frequency</TH>
                                 <TH className="hidden md:table-cell">Next invoice</TH>
                                 <TH>Status</TH>
+                                {customColumns.map((f) => (
+                                    <TH key={f.key} className="hidden lg:table-cell">
+                                        {f.label}
+                                    </TH>
+                                ))}
                                 <TH align="right">Amount</TH>
                                 <TH className="w-10" />
                             </THead>
@@ -103,6 +109,11 @@ export default function RecurringIndex({ recurring, filters: initial, statuses, 
                                         <TD>
                                             <StatusBadge status={r.status} />
                                         </TD>
+                                        {customColumns.map((f) => (
+                                            <TD key={f.key} className="hidden max-w-48 truncate lg:table-cell">
+                                                <CustomCell field={f} values={r.custom_values} />
+                                            </TD>
+                                        ))}
                                         <TD align="right" className="font-medium text-slate-900 tabular-nums">
                                             {formatMoney(r.total, currency)}
                                         </TD>
