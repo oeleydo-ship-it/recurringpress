@@ -44,9 +44,9 @@ const INVOICES = [
 
 export function DashboardMock() {
     return (
-        <div className="overflow-hidden rounded-2xl bg-white text-left shadow-xl shadow-blue-900/10 ring-1 ring-slate-200" aria-hidden="true">
+        <div className="@container overflow-hidden rounded-2xl bg-white text-left shadow-xl shadow-blue-900/10 ring-1 ring-slate-200" aria-hidden="true">
             <div className="flex">
-                <aside className="hidden w-48 shrink-0 border-r border-slate-100 p-4 md:block">
+                <aside className="hidden w-48 shrink-0 border-r border-slate-100 p-4 @3xl:block">
                     <div className="flex items-center gap-2">
                         <span className="flex size-7 items-center justify-center rounded-md bg-blue-600">
                             <FileText className="size-3.5 text-white" />
@@ -61,14 +61,14 @@ export function DashboardMock() {
                         ))}
                     </ul>
                 </aside>
-                <div className="min-w-0 flex-1 p-4 sm:p-6">
+                <div className="min-w-0 flex-1 p-4 @lg:p-6">
                     <div className="flex items-center justify-between gap-3">
                         <div>
                             <p className="text-sm font-semibold text-slate-900">Dashboard</p>
-                            <p className="text-[11px] text-slate-400">Welcome back — here is how billing looks today.</p>
+                            <p className="hidden text-[11px] text-slate-400 @md:block">Welcome back — here is how billing looks today.</p>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <span className="hidden items-center gap-1.5 rounded-md bg-slate-50 px-2 py-1 text-[11px] text-slate-400 ring-1 ring-slate-200 sm:flex">
+                        <div className="flex shrink-0 items-center gap-2">
+                            <span className="hidden items-center gap-1.5 rounded-md bg-slate-50 px-2 py-1 text-[11px] text-slate-400 ring-1 ring-slate-200 @2xl:flex">
                                 <Search className="size-3" /> Search
                             </span>
                             <Bell className="size-4 text-slate-400" />
@@ -76,23 +76,23 @@ export function DashboardMock() {
                         </div>
                     </div>
 
-                    <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    <div className="mt-5 grid grid-cols-2 gap-3 @2xl:grid-cols-4">
                         {KPIS.map(([label, value, delta, tone]) => (
                             <div key={label} className="rounded-xl p-3 ring-1 ring-slate-100">
                                 <p className="truncate text-[11px] text-slate-500">{label}</p>
-                                <p className="mt-1 text-base font-semibold text-slate-900 sm:text-lg">{value}</p>
+                                <p className="mt-1 text-base font-semibold text-slate-900 @lg:text-lg">{value}</p>
                                 <span className={cn('mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium', tone)}>{delta}</span>
                             </div>
                         ))}
                     </div>
 
-                    <div className="mt-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+                    <div className="mt-4 grid gap-4 @3xl:grid-cols-[1.4fr_1fr]">
                         <div className="rounded-xl p-4 ring-1 ring-slate-100">
                             <div className="flex items-center justify-between">
                                 <p className="text-xs font-semibold text-slate-900">Revenue</p>
                                 <span className="text-[10px] text-slate-400">Last 12 months</span>
                             </div>
-                            <div className="mt-4 flex h-28 items-end gap-1.5 sm:h-36">
+                            <div className="mt-4 flex h-28 items-end gap-1.5 @lg:h-36">
                                 {BARS.map((h, i) => (
                                     <span key={i} className={cn('flex-1 rounded-t', i === BARS.length - 1 ? 'bg-blue-600' : 'bg-blue-200')} style={{ height: `${h}%` }} />
                                 ))}
