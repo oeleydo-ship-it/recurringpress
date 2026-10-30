@@ -131,7 +131,7 @@
                     <td style="text-align: center;">{{ $item->quantity }}</td>
                     <td style="text-align: center;">{{ $item->unit }}</td>
                     <td style="text-align: right;">{{ $invoice->company->currency_symbol }}{{ number_format($item->price, 2) }}</td>
-                    <td style="text-align: right;">{{ $invoice->company->currency_symbol }}{{ number_format($item->total, 2) }}</td>
+                    <td style="text-align: right;">{{ $invoice->company->currency_symbol }}{{ number_format($item->subtotal, 2) }}</td>
                 </tr>
                 @endforeach
             </tbody>

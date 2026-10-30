@@ -317,7 +317,7 @@
                             <td class="price">{{ $invoice->company->currency_symbol }}{{ number_format($item->price, 2) }}
                             </td>
                             <td class="price" style="font-weight: bold;">
-                                {{ $invoice->company->currency_symbol }}{{ number_format($item->total, 2) }}</td>
+                                {{ $invoice->company->currency_symbol }}{{ number_format($item->subtotal, 2) }}</td>
                         </tr>
                     @endforeach
                 </tbody>
