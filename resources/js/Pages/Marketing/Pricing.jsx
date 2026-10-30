@@ -24,7 +24,7 @@ export default function Pricing({ title, subtitle, plans, faq }) {
                         </dl>
                         <p className="mt-6 text-center text-sm text-slate-500">
                             More answers in our{' '}
-                            <Link href={route('landing.faq')} className="font-semibold text-indigo-600">
+                            <Link href={route('landing.faq')} className="font-semibold text-blue-600">
                                 FAQ
                             </Link>
                             .

@@ -56,6 +56,7 @@ export default function LandingSettings({ settings }) {
                         content: (
                             <Card>
                                 <CardBody className="grid gap-4 sm:grid-cols-2">
+                                    {text('landing_hero_eyebrow', 'Eyebrow', { className: 'sm:col-span-2', hint: 'Small blue line above the headline.' })}
                                     {text('landing_hero_title', 'Headline', { required: true, className: 'sm:col-span-2' })}
                                     {text('landing_hero_subtitle', 'Subheadline', { required: true, textarea: true, className: 'sm:col-span-2' })}
                                     {text('landing_cta_text', 'Button text', { required: true })}

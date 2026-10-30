@@ -24,6 +24,8 @@ class RegisterController extends Controller
         return Inertia::render('Auth/Register', [
             'plan' => $plan?->only('name', 'slug', 'price', 'trial_days'),
             'planSlug' => $plan?->slug ?? 'free',
+            // Prefill from the marketing footer's "start with your email" box.
+            'email' => filter_var($request->query('email'), FILTER_VALIDATE_EMAIL) ?: '',
         ]);
     }
 

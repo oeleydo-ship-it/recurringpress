@@ -19,6 +19,7 @@ class LandingController extends Controller
 
         return Inertia::render('Marketing/Home', [
             'hero' => [
+                'eyebrow' => SystemSetting::get('landing_hero_eyebrow', 'Invoicing for freelancers & small businesses'),
                 'title' => SystemSetting::get('landing_hero_title', 'Professional Invoicing Made Simple'),
                 'subtitle' => SystemSetting::get('landing_hero_subtitle', 'Create beautiful invoices, manage clients, track payments, and grow your business. Built for freelancers and small businesses.'),
                 'cta_text' => SystemSetting::get('landing_cta_text', 'Get Started Free'),

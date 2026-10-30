@@ -95,6 +95,7 @@ return array (
   ),
   'landing_defaults' => 
   array (
+    'landing_hero_eyebrow' => 'Invoicing for freelancers & small businesses',
     'landing_hero_title' => 'Professional Invoicing Made Simple',
     'landing_hero_subtitle' => 'Create beautiful invoices, manage clients, track payments, and grow your business. Built for freelancers and small businesses who want to get paid faster.',
     'landing_cta_text' => 'Get Started Free',

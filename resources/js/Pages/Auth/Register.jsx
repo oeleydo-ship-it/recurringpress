@@ -12,12 +12,12 @@ const rules = [
     { label: 'A number', test: (v) => /\d/.test(v) },
 ];
 
-export default function Register({ plan, planSlug }) {
+export default function Register({ plan, planSlug, email = '' }) {
     const hp = useHoneypot();
     const form = useForm({
         ...hp.fields,
         name: '',
-        email: '',
+        email,
         company_name: '',
         password: '',
         password_confirmation: '',

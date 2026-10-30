@@ -493,7 +493,7 @@ class SettingsController extends Controller
     {
         $defaults = config('marketing.landing_defaults', []);
         $keys = [
-            'landing_hero_title', 'landing_hero_subtitle', 'landing_cta_text', 'landing_cta_url', 'landing_trust_text',
+            'landing_hero_eyebrow', 'landing_hero_title', 'landing_hero_subtitle', 'landing_cta_text', 'landing_cta_url', 'landing_trust_text',
             'landing_features_title', 'landing_features_subtitle', 'features_page_title', 'features_page_subtitle',
             'features_page_cta_title', 'features_page_cta_subtitle', 'landing_pricing_title', 'landing_pricing_subtitle',
             'landing_testimonials_title', 'landing_testimonials_subtitle', 'landing_footer_text',
@@ -515,6 +515,7 @@ class SettingsController extends Controller
     public function updateLanding(Request $request)
     {
         $validated = $request->validate([
+            'landing_hero_eyebrow' => 'nullable|string|max:80',
             'landing_hero_title' => 'required|string|max:255',
             'landing_hero_subtitle' => 'required|string|max:1000',
             'landing_cta_text' => 'required|string|max:50',
