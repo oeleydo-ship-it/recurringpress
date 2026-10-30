@@ -9,9 +9,10 @@ use App\Services\Ai\Providers\ProviderUnavailable;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Tenant AI requests. Configured in Superadmin → AI: an on/off switch, a per-tenant monthly
- * request quota, and providers (Anthropic, OpenAI, DeepSeek, Kimi; see AiProviders) with a
- * default and a failover order.
+ * Tenant AI requests. Configured in Superadmin → AI: an on/off switch, a default per-tenant
+ * monthly request quota, and providers (Anthropic, OpenAI, DeepSeek, Kimi; see AiProviders)
+ * with a default and a failover order. Each plan (Superadmin → Plans) can switch AI off for
+ * its tenants or set its own monthly quota in place of the default.
  *
  * A request goes to the default provider; on a technical failure (outage, rate limit, bad
  * key, unusable output) it is retried on the next usable provider. A refusal is final: the
@@ -25,15 +26,24 @@ class AiClient
     /** Follow-up calls inside one chat turn (tool rounds): logged, but not counted or blocked by the quota. */
     public const STEP_FEATURE = 'chat_step';
 
-    public static function monthlyQuota(): int
+    /** The company's plan limit when it sets one, otherwise the platform-wide default from Superadmin → AI. */
+    public static function monthlyQuota(?Company $company = null): int
     {
-        return max(0, (int) (SystemSetting::get('ai_monthly_quota') ?? self::DEFAULT_QUOTA));
+        $planLimit = $company?->subscriptionPlan?->max_ai_requests;
+
+        return max(0, (int) ($planLimit ?? SystemSetting::get('ai_monthly_quota') ?? self::DEFAULT_QUOTA));
     }
 
     /** Switched on in Superadmin and at least one provider is usable. */
     public static function enabled(): bool
     {
         return filter_var(SystemSetting::get('ai_enabled'), FILTER_VALIDATE_BOOL) && AiProviders::chain() !== [];
+    }
+
+    /** AI is on for the platform and the company's (active) plan includes it. */
+    public static function allowedFor(Company $company): bool
+    {
+        return self::enabled() && $company->canUseFeature('ai');
     }
 
     public static function usedThisMonth(Company $company): int
@@ -47,7 +57,7 @@ class AiClient
 
     public static function remaining(Company $company): int
     {
-        return max(0, self::monthlyQuota() - self::usedThisMonth($company));
+        return max(0, self::monthlyQuota($company) - self::usedThisMonth($company));
     }
 
     /**
@@ -63,8 +73,16 @@ class AiClient
             throw new AiException('AI features are not available right now.');
         }
 
+        if ($company && ! $company->canUseFeature('ai')) {
+            throw new AiException('Your plan does not include AI features. Upgrade your plan to use them.');
+        }
+
         if ($company && $feature !== self::STEP_FEATURE && self::remaining($company) <= 0) {
-            throw new AiException('You have used all ' . self::monthlyQuota() . ' AI requests for this month. The limit resets on the 1st.');
+            $quota = self::monthlyQuota($company);
+
+            throw new AiException($quota > 0
+                ? 'You have used all ' . $quota . ' AI requests included in your plan this month. The limit resets on the 1st; upgrade your plan for more.'
+                : 'Your plan does not include AI requests. Upgrade your plan to use them.');
         }
 
         $lastFailure = null;

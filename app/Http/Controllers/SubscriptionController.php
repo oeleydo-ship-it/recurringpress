@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\SubscriptionPlan;
+use App\Services\Ai\AiClient;
 use App\Services\StripeGateway;
 use App\Services\TenantNotifier;
 use Illuminate\Http\Request;
@@ -201,6 +202,8 @@ class SubscriptionController extends Controller
             ...$p->only('id', 'name', 'slug', 'description', 'billing_cycle', 'trial_days', 'max_invoices', 'max_clients', 'max_users', 'max_products', 'custom_branding', 'white_label', 'custom_domain', 'subdomain', 'stripe_enabled', 'is_popular'),
             'price' => (float) $p->price,
             'features' => $p->features ?? [],
+            // Monthly AI requests the plan includes; null when AI is off for the plan or the platform.
+            'ai_requests' => $p->ai_enabled && AiClient::enabled() ? ($p->max_ai_requests ?? AiClient::monthlyQuota()) : null,
         ];
     }
 }

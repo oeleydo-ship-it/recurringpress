@@ -319,6 +319,7 @@ class Company extends Model
             'stripe' => $this->subscriptionPlan->stripe_enabled,
             'custom_branding' => $this->subscriptionPlan->custom_branding,
             'api_access' => $this->subscriptionPlan->api_access,
+            'ai' => (bool) $this->subscriptionPlan->ai_enabled,
             'white_label', 'custom_domain', 'subdomain' => (bool) $this->subscriptionPlan->{$feature},
             default => false,
         };

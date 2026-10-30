@@ -70,7 +70,7 @@ class DashboardController extends Controller
                 ->map(fn (Invoice $i) => $this->invoiceRow($i)),
             'usage' => $this->usage($company),
             // Last AI analysis (cached up to a day); a new one is generated on request.
-            'aiInsights' => \App\Services\Ai\AiClient::enabled()
+            'aiInsights' => \App\Services\Ai\AiClient::allowedFor($company)
                 ? AiController::withInvoiceLinks(\App\Services\Ai\AiFeatures::cachedInsights($company), $company)
                 : null,
             'greeting' => $this->greeting(),

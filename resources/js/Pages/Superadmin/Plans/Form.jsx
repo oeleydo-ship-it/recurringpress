@@ -16,6 +16,8 @@ export default function PlanForm({ plan }) {
         max_clients: plan?.max_clients ?? '',
         max_users: plan?.max_users ?? '',
         max_products: plan?.max_products ?? '',
+        ai_enabled: plan?.ai_enabled ?? true,
+        max_ai_requests: plan?.max_ai_requests ?? '',
         features: (plan?.features ?? []).join('\n'),
         stripe_enabled: plan?.stripe_enabled ?? true,
         custom_branding: plan?.custom_branding ?? false,
@@ -40,7 +42,7 @@ export default function PlanForm({ plan }) {
         form.transform((data) => ({
             ...data,
             features: data.features.split('\n').map((f) => f.trim()).filter(Boolean),
-            ...Object.fromEntries(['max_invoices', 'max_clients', 'max_users', 'max_products'].map((k) => [k, data[k] === '' ? null : data[k]])),
+            ...Object.fromEntries(['max_invoices', 'max_clients', 'max_users', 'max_products', 'max_ai_requests'].map((k) => [k, data[k] === '' ? null : data[k]])),
         }));
         if (editing) form.put(route('superadmin.plans.update', plan.id));
         else form.post(route('superadmin.plans.store'));
@@ -81,6 +83,17 @@ export default function PlanForm({ plan }) {
                             {num('max_clients', 'Clients')}
                             {num('max_users', 'Team members')}
                             {num('max_products', 'Products')}
+                        </CardBody>
+                    </Card>
+                    <Card>
+                        <CardHeader title="AI assistant" description="Ask AI chat, dashboard insights, payment reminders and line-item drafting. Every request is a paid call to the AI provider." />
+                        <CardBody className="grid gap-4 sm:grid-cols-2">
+                            <Switch label="Include AI features" checked={d.ai_enabled} onChange={(v) => form.setData('ai_enabled', v)} className="sm:col-span-2" />
+                            {d.ai_enabled ? (
+                                <FormField label="AI requests per month" error={e.max_ai_requests} hint="Per company; resets on the 1st. Leave blank to use the default from Superadmin → AI.">
+                                    <Input type="number" min="0" value={d.max_ai_requests ?? ''} onChange={(ev) => form.setData('max_ai_requests', ev.target.value)} placeholder="Platform default" invalid={Boolean(e.max_ai_requests)} />
+                                </FormField>
+                            ) : null}
                         </CardBody>
                     </Card>
                     <Card>

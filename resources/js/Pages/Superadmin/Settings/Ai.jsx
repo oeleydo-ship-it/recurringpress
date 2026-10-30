@@ -57,7 +57,7 @@ export default function AiSettings({ settings, providers, usage }) {
                                     <FormField label="Default provider" error={e.ai_default_provider}>
                                         <Select value={d.ai_default_provider} onChange={(ev) => form.setData('ai_default_provider', ev.target.value)} options={labels} />
                                     </FormField>
-                                    <FormField label="Requests per tenant per month" error={e.ai_monthly_quota} hint="0 disables AI for tenants without switching it off.">
+                                    <FormField label="Requests per tenant per month" error={e.ai_monthly_quota} hint="Default for plans without their own limit (set in Plans, where AI can also be switched off per plan). 0 disables AI for those plans.">
                                         <Input type="number" min="0" value={d.ai_monthly_quota} onChange={(ev) => form.setData('ai_monthly_quota', ev.target.value)} invalid={Boolean(e.ai_monthly_quota)} />
                                     </FormField>
                                 </div>

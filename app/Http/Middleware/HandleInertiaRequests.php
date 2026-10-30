@@ -122,8 +122,11 @@ class HandleInertiaRequests extends Middleware
                 'plan' => $company->subscriptionPlan?->name,
                 'show_payouts' => $settings && $settings->payment_gateway_mode !== 'own',
                 'date_format' => $settings->date_format ?? 'M d, Y',
-                // AI buttons are hidden unless the platform has AI switched on.
-                'ai' => \App\Services\Ai\AiClient::enabled() ? ['remaining' => \App\Services\Ai\AiClient::remaining($company)] : null,
+                // AI buttons are hidden unless the platform has AI switched on and the plan includes it.
+                'ai' => \App\Services\Ai\AiClient::allowedFor($company) ? [
+                    'remaining' => \App\Services\Ai\AiClient::remaining($company),
+                    'quota' => \App\Services\Ai\AiClient::monthlyQuota($company),
+                ] : null,
             ] : null,
             // Bell badge; refreshed on every Inertia visit and by light polling in AppLayout.
             'notifications' => $company ? [

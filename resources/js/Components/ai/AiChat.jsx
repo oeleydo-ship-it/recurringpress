@@ -134,7 +134,17 @@ export default function AiChat() {
                             </span>
                             <div className="min-w-0 flex-1">
                                 <DialogTitle className="text-sm font-semibold text-slate-900">AI assistant</DialogTitle>
-                                <p className="text-xs text-slate-500">{remaining} AI requests left this month</p>
+                                <p className="text-xs text-slate-500">
+                                    {remaining} of {auth.company.ai.quota} AI requests left this month
+                                    {remaining <= 0 && auth.user?.is_admin ? (
+                                        <>
+                                            {' · '}
+                                            <Link href={route('settings.subscription')} className="font-medium text-brand-600 hover:underline">
+                                                Upgrade plan
+                                            </Link>
+                                        </>
+                                    ) : null}
+                                </p>
                             </div>
                             {messages.length ? (
                                 <Button variant="ghost" size="icon-sm" onClick={reset} aria-label="New chat" title="New chat">

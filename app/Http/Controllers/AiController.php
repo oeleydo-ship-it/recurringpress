@@ -14,7 +14,8 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 /**
- * Tenant AI endpoints (JSON). Each request counts against the company's monthly quota;
+ * Tenant AI endpoints (JSON). Each request needs a plan that includes AI and counts against the
+ * company's monthly quota (see AiClient);
  * failures come back as 422 with a message safe to show.
  */
 class AiController extends Controller
@@ -86,6 +87,10 @@ class AiController extends Controller
 
         if (! AiClient::enabled()) {
             return response()->json(['message' => 'AI features are not available right now.'], 422);
+        }
+
+        if (! auth()->user()->company->canUseFeature('ai')) {
+            return response()->json(['message' => 'Your plan does not include AI features. Upgrade your plan to use them.'], 422);
         }
 
         $result = AiTools::confirm($request->input('token'), auth()->user());
