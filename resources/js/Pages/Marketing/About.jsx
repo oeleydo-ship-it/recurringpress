@@ -31,7 +31,7 @@ export default function About() {
                     <dl className="grid grid-cols-2 gap-3 rounded-3xl bg-blue-50 p-3 ring-1 ring-blue-100 sm:gap-4 sm:p-6">
                         {[
                             ['980+', 'Active users'],
-                            ['$2.4M+', 'Invoiced'],
+                            ['$850K+', 'Invoiced'],
                             ['12K+', 'Invoices sent'],
                             ['17', 'Invoice templates'],
                         ].map(([n, l]) => (
