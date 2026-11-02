@@ -28,8 +28,8 @@ class PostController extends Controller
         $now = now();
         $keywordsRaw = (string) SystemSetting::get('ai_blog_keywords', '');
         $parsedKeywords = AiBlogService::parseKeywords($keywordsRaw);
-        $usedKeywords = $blogService->getUsedKeywords();
-        $unusedCount = count(array_filter($parsedKeywords, fn ($kw) => ! in_array(mb_strtolower($kw), $usedKeywords, true)));
+        $unusedCount = count($blogService->getRemainingKeywords());
+        $heartbeat = AiBlogService::schedulerHeartbeat();
 
         return Inertia::render('Superadmin/Posts/Index', [
             'posts' => $posts->through(fn (CmsPost $p) => [
@@ -46,7 +46,10 @@ class PostController extends Controller
                 'image' => $this->imageUrl($p),
                 'url' => route('blog.show', $p->slug),
             ]),
-            'generationRuns' => AiBlogRun::latest()->limit(10)->get()->map(fn ($run) => [
+            // Everything in progress, then only the latest three finished (completed or failed).
+            'generationRuns' => AiBlogRun::whereIn('status', ['queued', 'running'])->latest('id')->get()
+                ->concat(AiBlogRun::whereNotIn('status', ['queued', 'running'])->latest('id')->limit(3)->get())
+                ->map(fn ($run) => [
                 'id' => $run->id, 'keyword' => $run->keyword, 'status' => $run->status,
                 'post_id' => $run->post_id, 'error' => $run->error, 'at' => $run->created_at->toIso8601String(),
             ]),
@@ -71,6 +74,8 @@ class PostController extends Controller
                 'total_keywords' => count($parsedKeywords),
                 'unused_keywords' => $unusedCount,
                 'ai_available' => AiClient::enabled(),
+                'scheduler_last_run_at' => $heartbeat?->toIso8601String(),
+                'scheduler_running' => $heartbeat?->gt(now()->subMinutes(AiBlogService::SCHEDULER_STALE_MINUTES)) ?? false,
             ],
             'stats' => [
                 'total' => CmsPost::count(),
@@ -246,21 +251,6 @@ class PostController extends Controller
         $blogService->queuePost($validated['keyword'], $options);
 
         return back()->with('success', "AI blog generation job queued for “{$validated['keyword']}”. It will appear in the posts list shortly.");
-    }
-
-    public function triggerSchedulerNow(AiBlogService $blogService)
-    {
-        if (! AiClient::enabled()) {
-            return back()->with('error', 'AI is not enabled. Configure an AI API key in Superadmin → AI first.');
-        }
-
-        $keyword = $blogService->runScheduledGeneration();
-
-        if ($keyword) {
-            return back()->with('success', "Dispatched generation job for keyword: “{$keyword}”.");
-        }
-
-        return back()->with('info', 'No job queued. Check that automation is enabled, the current time slot is available, and unused topics remain.');
     }
 
     private function validated(Request $request, ?CmsPost $post = null): array

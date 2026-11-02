@@ -7,8 +7,11 @@ use App\Models\AiBlogRun;
 use App\Models\CmsPost;
 use App\Models\Superadmin;
 use App\Models\SystemSetting;
+use App\Support\Seo;
 use Carbon\Carbon;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class AiBlogService
@@ -24,6 +27,14 @@ class AiBlogService
         'https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=1200&q=80', // Handshake & business agreement
         'https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?auto=format&fit=crop&w=1200&q=80', // Budget and coins growth
     ];
+
+    /** Also the blog:ai-schedule mutex expiry: longer than any run, short enough to recover from a killed one. */
+    public const STALE_RUN_MINUTES = 30;
+
+    /** The Blog posts page warns when schedule:run has been silent for this long. */
+    public const SCHEDULER_STALE_MINUTES = 5;
+
+    private const HEARTBEAT_CACHE_KEY = 'ai_blog_scheduler_heartbeat';
 
     /** Banned phrases still present in the last generated post (see AiWritingStyle). */
     public array $lastStyleIssues = [];
@@ -235,45 +246,106 @@ class AiBlogService
         return $after->copy()->addDay();
     }
 
-    /** Reserve each daily slot before dispatch, including queued and failed work. */
-    public function runScheduledGeneration(): ?string
+    /**
+     * The unattended Auto-Blogger, run by the scheduler (blog:ai-schedule) with nobody signed in.
+     * Generates in this process, so it needs cron but no queue worker. Each daily slot is claimed
+     * once (unique ai_blog_runs.slot) before the provider is called, and a failed attempt uses up
+     * its slot: the next slot moves on to another topic instead of hammering the provider.
+     */
+    public function runScheduledGeneration(): ?AiBlogRun
     {
+        $this->failStaleRuns();
+
         if (! filter_var(SystemSetting::get('ai_blog_enabled', false), FILTER_VALIDATE_BOOL) || ! AiClient::enabled()) {
             return null;
         }
 
-        return Cache::lock('ai-blog-scheduler', 30)->get(function () {
-            $count = max(1, min(12, (int) SystemSetting::get('ai_blog_posts_per_day', 1)));
-            $timezone = SystemSetting::get('ai_blog_timezone', config('app.timezone'));
-            $local = now()->timezone($timezone);
-            $start = $local->copy()->startOfDay()->setTimeFromTimeString(SystemSetting::get('ai_blog_start_time', '09:00'));
-            if ($local->lessThan($start)) {
-                $start->subDay();
-            }
-            $i = min($count - 1, (int) floor($start->diffInMinutes($local) / (1440 / $count)));
-            $slot = $start->format('Y-m-d').'-'.$i;
-            if (AiBlogRun::where('slot', $slot)->exists()) {
-                return null;
-            }
-            $keyword = $this->getNextKeyword();
-            if (! $keyword) {
-                return null;
-            }
-            $this->queuePost($keyword, [
-                'status' => SystemSetting::get('ai_blog_status', 'scheduled'),
-                'tone' => SystemSetting::get('ai_blog_tone', 'professional and engaging'),
-                'language' => SystemSetting::get('ai_blog_language', 'English'),
-                'include_faq' => filter_var(SystemSetting::get('ai_blog_include_faq', true), FILTER_VALIDATE_BOOL),
-                'posts_per_day' => $count,
-            ], $slot);
+        $run = Cache::lock('ai-blog-scheduler', 30)->get(fn () => $this->claimScheduledRun());
+        if (! $run) {
+            return null;
+        }
 
-            return $keyword;
-        });
+        try {
+            $post = $this->generateAndCreate($run->keyword, $run->options);
+            $issues = $this->lastStyleIssues;
+            $run->update(['status' => 'completed', 'post_id' => $post->id, 'error' => $issues ? 'Saved. Still contains banned wording: '.implode(', ', $issues).'. Edit the post before publishing.' : null]);
+        } catch (\Throwable $e) {
+            $run->update(['status' => 'failed', 'error' => $e instanceof AiException ? $e->getMessage() : 'Generation failed. Check the provider connection and AI usage errors.']);
+            Log::error("Auto-Blogger failed for keyword '{$run->keyword}': ".$e->getMessage(), ['exception' => $e]);
+        }
+
+        return $run;
     }
 
-    public function queuePost(string $keyword, array $options, ?string $slot = null): AiBlogRun
+    /** Reserve the current slot and the next topic, or null when there is nothing to do yet. */
+    private function claimScheduledRun(): ?AiBlogRun
     {
-        $run = AiBlogRun::create(['keyword' => $keyword, 'options' => $options, 'slot' => $slot]);
+        $count = max(1, min(12, (int) SystemSetting::get('ai_blog_posts_per_day', 1)));
+        $timezone = SystemSetting::get('ai_blog_timezone', config('app.timezone'));
+        $local = now()->timezone($timezone);
+        $start = $local->copy()->startOfDay()->setTimeFromTimeString(SystemSetting::get('ai_blog_start_time', '09:00'));
+        if ($local->lessThan($start)) {
+            $start->subDay();
+        }
+        $i = min($count - 1, (int) floor($start->diffInMinutes($local) / (1440 / $count)));
+        $slot = $start->format('Y-m-d').'-'.$i;
+        if (AiBlogRun::where('slot', $slot)->exists()) {
+            return null;
+        }
+        // Changing the timezone, start time or cadence renames slots, so also cap the rolling 24 hours.
+        $recent = AiBlogRun::whereNotNull('slot')->where('status', '!=', 'failed')->where('created_at', '>', now()->subDay())->count();
+        if ($recent >= $count) {
+            return null;
+        }
+        $keyword = $this->getNextKeyword();
+        if (! $keyword) {
+            return null;
+        }
+
+        try {
+            return AiBlogRun::create([
+                'keyword' => $keyword,
+                'slot' => $slot,
+                'status' => 'running',
+                'options' => [
+                    'status' => SystemSetting::get('ai_blog_status', 'scheduled'),
+                    'tone' => SystemSetting::get('ai_blog_tone', 'professional and engaging'),
+                    'language' => SystemSetting::get('ai_blog_language', 'English'),
+                    'include_faq' => filter_var(SystemSetting::get('ai_blog_include_faq', true), FILTER_VALIDATE_BOOL),
+                    'posts_per_day' => $count,
+                ],
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            return null; // Another server claimed this slot first.
+        }
+    }
+
+    /** A killed process or a missing worker must not hold a topic out of the queue forever. */
+    private function failStaleRuns(): void
+    {
+        AiBlogRun::where('status', 'running')->where('updated_at', '<', now()->subMinutes(self::STALE_RUN_MINUTES))
+            ->update(['status' => 'failed', 'error' => 'Generation was interrupted before it finished.']);
+        AiBlogRun::where('status', 'queued')->where('updated_at', '<', now()->subHour())
+            ->update(['status' => 'failed', 'error' => 'No queue worker picked this up within an hour. Check the ai-blog worker, then generate it again.']);
+    }
+
+    /** Every schedule:run records this, so the Blog posts page can warn when cron has stopped. */
+    public static function recordSchedulerHeartbeat(): void
+    {
+        // Not a SystemSetting: saving one of those every minute would keep clearing the sitemap cache.
+        Cache::forever(self::HEARTBEAT_CACHE_KEY, now()->toIso8601String());
+    }
+
+    public static function schedulerHeartbeat(): ?Carbon
+    {
+        $at = Cache::get(self::HEARTBEAT_CACHE_KEY);
+
+        return $at ? Carbon::parse($at) : null;
+    }
+
+    public function queuePost(string $keyword, array $options): AiBlogRun
+    {
+        $run = AiBlogRun::create(['keyword' => $keyword, 'options' => $options]);
         try {
             GenerateAiBlogPostJob::dispatch($keyword, $options, $run->id);
         } catch (\Throwable $e) {
@@ -319,10 +391,17 @@ class AiBlogService
      */
     public function publishDuePosts(): int
     {
-        return CmsPost::where('is_published', false)
+        $published = CmsPost::where('is_published', false)
             ->whereNotNull('published_at')
             ->where('published_at', '<=', now())
             ->update(['is_published' => true]);
+
+        // A bulk update fires no model events, so the saved() listener can't clear the sitemap here.
+        if ($published) {
+            Seo::forgetSitemap();
+        }
+
+        return $published;
     }
 
     /**
@@ -348,26 +427,29 @@ class AiBlogService
     }
 
     /**
-     * Get the next unused keyword from the configured list.
+     * Get the next unused keyword from the configured list. Topics that failed before go last,
+     * fewest failures first, so one bad topic or a provider outage can't block the rest.
      */
     public function getNextKeyword(): ?string
     {
-        $raw = SystemSetting::get('ai_blog_keywords', '');
-        $keywords = self::parseKeywords($raw);
+        $failures = AiBlogRun::where('status', 'failed')->pluck('keyword')->map(fn ($kw) => mb_strtolower(trim($kw)))->countBy();
+        $remaining = collect($this->getRemainingKeywords())->sortBy(fn ($kw) => $failures[mb_strtolower($kw)] ?? 0);
 
-        if (empty($keywords)) {
-            return null;
-        }
+        return $remaining->first(); // Exhaustion pauses generation until new topics are supplied.
+    }
 
-        $used = array_unique([...$this->getUsedKeywords(), ...AiBlogRun::whereIn('status', ['queued', 'running'])->pluck('keyword')->map(fn ($kw) => mb_strtolower(trim($kw)))->all()]);
+    /** Configured topics not yet used, queued or being generated, in their configured order. */
+    public function getRemainingKeywords(): array
+    {
+        $taken = array_unique([
+            ...$this->getUsedKeywords(),
+            ...AiBlogRun::whereIn('status', ['queued', 'running', 'completed'])->pluck('keyword')->map(fn ($kw) => mb_strtolower(trim($kw)))->all(),
+        ]);
 
-        foreach ($keywords as $kw) {
-            if (! in_array(mb_strtolower($kw), $used, true)) {
-                return $kw;
-            }
-        }
-
-        return null; // Exhaustion pauses generation until new topics are supplied.
+        return array_values(array_filter(
+            self::parseKeywords(SystemSetting::get('ai_blog_keywords', '')),
+            fn ($kw) => ! in_array(mb_strtolower($kw), $taken, true),
+        ));
     }
 
     public function getUsedKeywords(): array
@@ -380,13 +462,17 @@ class AiBlogService
 
     public function markKeywordAsUsed(string $keyword): void
     {
-        $used = $this->getUsedKeywords();
         $normalized = mb_strtolower(trim($keyword));
 
-        if (! in_array($normalized, $used, true)) {
-            $used[] = $normalized;
-            SystemSetting::set('ai_blog_used_keywords', json_encode($used));
-        }
+        // The list is one JSON value, so a scheduled run and a queued job must not overwrite each other.
+        Cache::lock('ai-blog-used-keywords', 10)->block(10, function () use ($normalized) {
+            $used = $this->getUsedKeywords();
+
+            if (! in_array($normalized, $used, true)) {
+                $used[] = $normalized;
+                SystemSetting::set('ai_blog_used_keywords', json_encode($used));
+            }
+        });
     }
 
     public function resetUsedKeywords(): void

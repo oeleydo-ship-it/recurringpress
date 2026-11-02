@@ -46,7 +46,8 @@ class GenerateAiBlogPostJob implements ShouldQueue
         }
         try {
             $run = $this->runId ? AiBlogRun::findOrFail($this->runId) : null;
-            if ($run?->status === 'completed') {
+            // Completed already, or given up on while waiting for a worker.
+            if (in_array($run?->status, ['completed', 'failed'], true)) {
                 return;
             }
             $run?->update(['status' => 'running', 'error' => null]);

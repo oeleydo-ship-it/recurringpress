@@ -120,13 +120,17 @@ Artisan::command('domains:recheck', function () {
 })->purpose('Refresh tenant custom domain status from Cloudflare (verifies pending ones, un-verifies broken ones)');
 
 Artisan::command('blog:ai-schedule', function (AiBlogService $blogService) {
-    $dispatched = $blogService->runScheduledGeneration();
-    if ($dispatched) {
-        $this->info("Dispatched AI blog post generation job for: {$dispatched}");
-    } else {
+    $run = $blogService->runScheduledGeneration();
+    if (! $run) {
         $this->info('No AI blog generation required at this time.');
+    } elseif ($run->status === 'completed') {
+        $this->info("Generated AI blog post for: {$run->keyword}");
+    } else {
+        $this->error("AI blog generation failed for: {$run->keyword} ({$run->error})");
+
+        return 1;
     }
-})->purpose('Generate and schedule AI blog posts based on superadmin settings');
+})->purpose('Generate the next queued AI blog post when a daily slot is due; needs no login or queue worker');
 
 Artisan::command('blog:publish-scheduled', function (AiBlogService $blogService) {
     $published = $blogService->publishDuePosts();
@@ -142,9 +146,13 @@ Schedule::command('invoices:generate-recurring')->daily()->withoutOverlapping()-
 Schedule::command('system:check-updates')->daily();
 Schedule::command('domains:recheck')->hourly()->withoutOverlapping()->onOneServer();
 
-// Automated AI Blog Post Generation & Scheduling
-Schedule::command('blog:ai-schedule')->everyMinute()->withoutOverlapping()->onOneServer();
+// Lets the Blog posts page warn when nothing is running schedule:run.
+Schedule::call(fn () => AiBlogService::recordSchedulerHeartbeat())->everyMinute()->name('blog:scheduler-heartbeat');
+
 Schedule::command('blog:publish-scheduled')->everyMinute()->withoutOverlapping();
 
 // Feeds the Horizon dashboard's throughput / runtime graphs.
 Schedule::command('horizon:snapshot')->everyFiveMinutes();
+
+// Keep this last: it generates in the foreground and can take minutes, which would hold up tasks after it.
+Schedule::command('blog:ai-schedule')->everyMinute()->withoutOverlapping(AiBlogService::STALE_RUN_MINUTES)->onOneServer();

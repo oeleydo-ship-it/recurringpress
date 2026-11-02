@@ -16,7 +16,7 @@ import {
     Sparkles,
     Trash2,
     Wand2,
-    Zap,
+    AlertTriangle,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import {
@@ -44,7 +44,7 @@ import {
     useConfirm,
 } from '@/Components/ui';
 import { route } from '@/lib/route';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatDateTime } from '@/lib/utils';
 
 export default function SuperadminPosts({ posts, aiSettings, stats, generationRuns = [] }) {
     useEffect(() => {
@@ -101,10 +101,6 @@ export default function SuperadminPosts({ posts, aiSettings, stats, generationRu
                 generateForm.reset('keyword');
             },
         });
-    };
-
-    const runSchedulerNow = () => {
-        router.post(route('superadmin.posts.ai-run-scheduler'), {}, { preserveScroll: true });
     };
 
     const publishNow = async (p) => {
@@ -174,6 +170,14 @@ export default function SuperadminPosts({ posts, aiSettings, stats, generationRu
                 </div>
                 <Button href={route('superadmin.settings.ai')} variant="secondary" icon={Settings2}>Configure / test API</Button>
             </div>
+            {(aiSettings?.enabled || stats.scheduled > 0) && !aiSettings?.scheduler_running && <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <div>
+                    <p className="font-semibold">The server scheduler is not running, so posts won't generate or publish automatically</p>
+                    <p className="mt-1">{aiSettings?.scheduler_last_run_at ? `Last run: ${formatDateTime(aiSettings.scheduler_last_run_at)}.` : 'It has not run yet.'} Add this to your host's cron or scheduler, to run every minute:</p>
+                    <code className="mt-2 block break-all rounded-sm bg-amber-100 px-2 py-1 text-xs">php artisan schedule:run</code>
+                </div>
+            </div>}
             {generationRuns.length > 0 && <Card className="mb-6">
                 <CardHeader title="Recent AI generation" />
                 <CardBody className="space-y-3">
@@ -358,24 +362,13 @@ export default function SuperadminPosts({ posts, aiSettings, stats, generationRu
                 description="Automatically generate SEO-optimized articles from target keywords and publish on a recurring schedule."
                 size="lg"
                 footer={
-                    <div className="flex w-full items-center justify-between">
-                        <Button
-                            type="button"
-                            variant="secondary"
-                            icon={Zap}
-                            onClick={runSchedulerNow}
-                            title="Generate the next queued keyword immediately"
-                        >
-                            Run Next in Queue
+                    <div className="flex w-full items-center justify-end gap-2">
+                        <Button type="button" variant="ghost" onClick={() => setShowSchedulerModal(false)}>
+                            Cancel
                         </Button>
-                        <div className="flex gap-2">
-                            <Button type="button" variant="ghost" onClick={() => setShowSchedulerModal(false)}>
-                                Cancel
-                            </Button>
-                            <Button loading={schedulerForm.processing} onClick={submitScheduler}>
-                                Save Settings
-                            </Button>
-                        </div>
+                        <Button loading={schedulerForm.processing} onClick={submitScheduler}>
+                            Save Settings
+                        </Button>
                     </div>
                 }
             >
@@ -436,7 +429,7 @@ export default function SuperadminPosts({ posts, aiSettings, stats, generationRu
                             <Input type="time" value={schedulerForm.data.ai_blog_start_time} onChange={(e) => schedulerForm.setData('ai_blog_start_time', e.target.value)} />
                         </FormField>
                     </div>
-                    <p className="text-xs text-slate-500">Automatic publishing requires the server scheduler every minute and an AI blog queue worker. Save settings before running the next slot.</p>
+                    <p className="text-xs text-slate-500">Articles generate at each slot with nobody signed in, as long as the server runs the scheduler every minute.</p>
                     <div className="grid gap-4 sm:grid-cols-2">
                         <FormField
                             label="Posts per day"
