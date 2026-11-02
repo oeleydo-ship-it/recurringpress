@@ -1,10 +1,10 @@
 import { Head, usePage } from '@inertiajs/react';
-import { Download, Globe, Mail, Phone } from 'lucide-react';
+import { ArrowLeft, Download, Globe, Mail, Phone } from 'lucide-react';
 import { useEffect } from 'react';
 import { contrastText } from '@/lib/utils';
 
 /** Branded frame for client-facing documents (public invoice / quotation links). */
-export default function PublicShell({ title, company, pdfUrl, children }) {
+export default function PublicShell({ title, company, pdfUrl, portalUrl, actions, nav, children }) {
     const { site } = usePage().props;
     const style = { '--brand': company.brand, '--brand-contrast': contrastText(company.brand) };
 
@@ -32,12 +32,21 @@ export default function PublicShell({ title, company, pdfUrl, children }) {
                             {company.address ? <p className="hidden truncate text-xs text-slate-500 sm:block">{company.address}</p> : null}
                         </div>
                     </div>
-                    {pdfUrl ? (
-                        <a href={pdfUrl} className="inline-flex h-9 items-center gap-2 rounded-lg bg-white px-3.5 text-sm font-medium text-slate-700 shadow-xs ring-1 ring-slate-300 hover:bg-slate-50">
-                            <Download className="size-4" /> <span className="hidden sm:inline">Download</span> PDF
-                        </a>
-                    ) : null}
+                    <div className="flex shrink-0 items-center gap-2">
+                        {portalUrl ? (
+                            <a href={portalUrl} className="inline-flex h-9 items-center gap-2 rounded-lg px-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100">
+                                <ArrowLeft className="size-4" /> <span className="hidden sm:inline">Client portal</span>
+                            </a>
+                        ) : null}
+                        {pdfUrl ? (
+                            <a href={pdfUrl} className="inline-flex h-9 items-center gap-2 rounded-lg bg-white px-3.5 text-sm font-medium text-slate-700 shadow-xs ring-1 ring-slate-300 hover:bg-slate-50">
+                                <Download className="size-4" /> <span className="hidden sm:inline">Download</span> PDF
+                            </a>
+                        ) : null}
+                        {actions}
+                    </div>
                 </div>
+                {nav}
             </header>
             <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">{children}</main>
             <footer className="mx-auto max-w-6xl px-4 pb-10 sm:px-6">

@@ -34,6 +34,7 @@ export default function PlanForm({ plan }) {
         white_label: plan?.white_label ?? false,
         custom_domain: plan?.custom_domain ?? false,
         subdomain: plan?.subdomain ?? false,
+        client_portal: plan?.client_portal ?? false,
         api_access: plan?.api_access ?? false,
         is_active: plan?.is_active ?? true,
         is_popular: plan?.is_popular ?? false,
@@ -136,6 +137,7 @@ export default function PlanForm({ plan }) {
                             <Switch label="White label (remove platform attribution)" checked={d.white_label} onChange={(v) => form.setData('white_label', v)} />
                             <Switch label="Custom domain" checked={d.custom_domain} onChange={(v) => form.setData('custom_domain', v)} />
                             <Switch label="Platform subdomain" checked={d.subdomain} onChange={(v) => form.setData('subdomain', v)} />
+                            <Switch label="Client portal (clients log in to see their invoices and quotations)" checked={d.client_portal} onChange={(v) => form.setData('client_portal', v)} />
                             <Switch label="API access" checked={d.api_access} onChange={(v) => form.setData('api_access', v)} />
                             <FormField label="Sort order" error={e.order}>
                                 <Input type="number" min="0" value={d.order} onChange={(ev) => form.setData('order', ev.target.value)} />

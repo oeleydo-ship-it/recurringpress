@@ -80,6 +80,7 @@ class PlanController extends Controller
             'subdomain' => 'boolean',
             'api_access' => 'boolean',
             'ai_enabled' => 'boolean',
+            'client_portal' => 'boolean',
             'is_active' => 'boolean',
             'is_popular' => 'boolean',
             'order' => 'nullable|integer|min:0|max:1000',
@@ -98,7 +99,7 @@ class PlanController extends Controller
         foreach (['max_invoices', 'max_clients', 'max_users', 'max_products', 'max_ai_requests'] as $limit) {
             $validated[$limit] = $validated[$limit] ?? null;
         }
-        foreach (['monthly_enabled', 'yearly_enabled', 'lifetime_enabled', 'stripe_enabled', 'custom_branding', 'white_label', 'custom_domain', 'subdomain', 'api_access', 'ai_enabled', 'is_active', 'is_popular'] as $flag) {
+        foreach (['monthly_enabled', 'yearly_enabled', 'lifetime_enabled', 'stripe_enabled', 'custom_branding', 'white_label', 'custom_domain', 'subdomain', 'api_access', 'ai_enabled', 'client_portal', 'is_active', 'is_popular'] as $flag) {
             $validated[$flag] = $request->boolean($flag);
         }
 
@@ -122,7 +123,7 @@ class PlanController extends Controller
     private function payload(SubscriptionPlan $p): array
     {
         return [
-            ...$p->only('id', 'name', 'slug', 'description', 'price_monthly', 'price_yearly', 'price_lifetime', 'monthly_enabled', 'yearly_enabled', 'lifetime_enabled', 'trial_days', 'max_invoices', 'max_clients', 'max_users', 'max_products', 'max_ai_requests', 'stripe_enabled', 'custom_branding', 'white_label', 'custom_domain', 'subdomain', 'api_access', 'ai_enabled', 'is_active', 'is_popular', 'order'),
+            ...$p->only('id', 'name', 'slug', 'description', 'price_monthly', 'price_yearly', 'price_lifetime', 'monthly_enabled', 'yearly_enabled', 'lifetime_enabled', 'trial_days', 'max_invoices', 'max_clients', 'max_users', 'max_products', 'max_ai_requests', 'stripe_enabled', 'custom_branding', 'white_label', 'custom_domain', 'subdomain', 'api_access', 'ai_enabled', 'client_portal', 'is_active', 'is_popular', 'order'),
             ...$p->pricingPayload(),
             'price_summary' => $p->priceSummary(),
             'features' => $p->features ?? [],

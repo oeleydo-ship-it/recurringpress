@@ -20,11 +20,12 @@ import {
     TR,
     useConfirm,
 } from '@/Components/ui';
+import ClientPortalCard from '@/Components/ClientPortalCard';
 import { CustomFieldValues } from '@/Components/CustomFields';
 import { route } from '@/lib/route';
 import { formatDate, formatMoney } from '@/lib/utils';
 
-export default function ClientShow({ client, invoices, stats, customFields = [] }) {
+export default function ClientShow({ client, invoices, stats, customFields = [], portal }) {
     const { auth } = usePage().props;
     const currency = auth.company?.currency;
     const df = auth.company?.date_format;
@@ -70,28 +71,31 @@ export default function ClientShow({ client, invoices, stats, customFields = [] 
             </div>
 
             <div className="mt-6 grid gap-6 lg:grid-cols-3">
-                <Card className="lg:col-span-1">
-                    <div className="flex items-center gap-4 border-b border-slate-100 p-5">
-                        <Avatar name={client.bill_to_name} size="lg" />
-                        <div className="min-w-0">
-                            <p className="truncate font-semibold text-slate-900">{client.bill_to_name}</p>
-                            {client.client_type === 'company' ? <p className="truncate text-sm text-slate-500">{client.name}</p> : null}
+                <div className="space-y-6 lg:col-span-1">
+                    <Card>
+                        <div className="flex items-center gap-4 border-b border-slate-100 p-5">
+                            <Avatar name={client.bill_to_name} size="lg" />
+                            <div className="min-w-0">
+                                <p className="truncate font-semibold text-slate-900">{client.bill_to_name}</p>
+                                {client.client_type === 'company' ? <p className="truncate text-sm text-slate-500">{client.name}</p> : null}
+                            </div>
                         </div>
-                    </div>
-                    <dl className="space-y-4 p-5">
-                        <ContactRow icon={Mail} value={client.email} href={client.email ? `mailto:${client.email}` : null} />
-                        <ContactRow icon={Phone} value={client.phone} href={client.phone ? `tel:${client.phone}` : null} />
-                        <ContactRow icon={MapPin} value={client.full_address} />
-                        <DescriptionItem label="Tax / VAT number">{client.tax_number}</DescriptionItem>
-                        <DescriptionItem label="Client since">{formatDate(client.created_at, df)}</DescriptionItem>
-                        {client.notes ? (
-                            <DescriptionItem label="Notes">
-                                <span className="whitespace-pre-line text-slate-600">{client.notes}</span>
-                            </DescriptionItem>
-                        ) : null}
-                    </dl>
-                    <CustomFieldValues fields={customFields} values={client.custom_values} className="border-t border-slate-100 p-5 sm:grid-cols-1" />
-                </Card>
+                        <dl className="space-y-4 p-5">
+                            <ContactRow icon={Mail} value={client.email} href={client.email ? `mailto:${client.email}` : null} />
+                            <ContactRow icon={Phone} value={client.phone} href={client.phone ? `tel:${client.phone}` : null} />
+                            <ContactRow icon={MapPin} value={client.full_address} />
+                            <DescriptionItem label="Tax / VAT number">{client.tax_number}</DescriptionItem>
+                            <DescriptionItem label="Client since">{formatDate(client.created_at, df)}</DescriptionItem>
+                            {client.notes ? (
+                                <DescriptionItem label="Notes">
+                                    <span className="whitespace-pre-line text-slate-600">{client.notes}</span>
+                                </DescriptionItem>
+                            ) : null}
+                        </dl>
+                        <CustomFieldValues fields={customFields} values={client.custom_values} className="border-t border-slate-100 p-5 sm:grid-cols-1" />
+                    </Card>
+                    <ClientPortalCard client={client} portal={portal} />
+                </div>
 
                 <Card className="lg:col-span-2">
                     <CardHeader title="Recent invoices" description="The 10 most recent invoices for this client" />

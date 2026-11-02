@@ -7,14 +7,14 @@ import PublicShell from '@/Components/PublicShell';
 import { Button, Card, FormField, Modal, StatusBadge, Textarea } from '@/Components/ui';
 import { formatDate, formatMoney } from '@/lib/utils';
 
-export default function PublicQuotation({ quotation: q, company, payment, urls }) {
+export default function PublicQuotation({ quotation: q, company, payment, urls, portalUrl }) {
     const money = (v) => formatMoney(v, q.currency);
     const [dialog, setDialog] = useState(null); // 'accept' | 'reject'
     const accept = useForm({ notes: '' });
     const reject = useForm({ rejection_reason: '' });
 
     return (
-        <PublicShell title={`Quotation ${q.number} from ${company.name}`} company={company} pdfUrl={urls.pdf}>
+        <PublicShell title={`Quotation ${q.number} from ${company.name}`} company={company} pdfUrl={urls.pdf} portalUrl={portalUrl}>
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
                 <div className="order-2 lg:order-1">
                     <DocumentPreview src={urls.document} version={q.status} />

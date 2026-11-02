@@ -5,12 +5,12 @@ import PublicShell from '@/Components/PublicShell';
 import { Card, StatusBadge } from '@/Components/ui';
 import { formatDate, formatMoney } from '@/lib/utils';
 
-export default function PublicInvoice({ invoice, company, payment, urls }) {
+export default function PublicInvoice({ invoice, company, payment, urls, portalUrl }) {
     const money = (v) => formatMoney(v, invoice.currency);
     const paid = invoice.amount_due <= 0 || invoice.status === 'paid';
 
     return (
-        <PublicShell title={`Invoice ${invoice.number} from ${company.name}`} company={company} pdfUrl={urls.pdf}>
+        <PublicShell title={`Invoice ${invoice.number} from ${company.name}`} company={company} pdfUrl={urls.pdf} portalUrl={portalUrl}>
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
                 <div className="order-2 lg:order-1">
                     <DocumentPreview src={urls.document} version={`${invoice.status}-${invoice.paid}`} />

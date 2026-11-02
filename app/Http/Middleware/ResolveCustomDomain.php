@@ -12,7 +12,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Requests on a tenant's custom domain or platform subdomain may reach that tenant's home, public invoice and
- * quotation pages; everything else is sent to the platform. Unknown hosts get a bare 404
+ * quotation pages and client portal; everything else is sent to the platform. Unknown hosts get a bare 404
  * (no session, no branding, nothing about any tenant).
  *
  * Runs before StartSession (prepended to the web group).
@@ -48,13 +48,14 @@ class ResolveCustomDomain
 
             return response()->view('tenant.home', [
                 'company' => PublicDocument::company($company),
+                'portalUrl' => $company->clientPortalOpen() ? $company->clientPortalUrl() : null,
                 'loginUrl' => rtrim((string) config('app.url'), '/') . '/login',
                 'siteName' => SystemSetting::get('site_name', 'RecurringPress'),
             ])->header('Cache-Control', 'no-store, private')
                 ->header('X-Robots-Tag', 'noindex, nofollow');
         }
 
-        if (! $request->is('invoice/*', 'quotation/*')) {
+        if (! $request->is('invoice/*', 'quotation/*', 'portal', 'portal/*')) {
             return $request->isMethod('GET')
                 ? redirect()->away(rtrim((string) config('app.url'), '/') . '/' . ltrim($request->path(), '/'))
                 : response('Not Found', 404, ['Content-Type' => 'text/plain']);
@@ -63,7 +64,7 @@ class ResolveCustomDomain
         $request->attributes->set(TenantDomain::ATTRIBUTE, $company->id);
 
         // A platform-wide cookie domain (e.g. ".recurringpress.com") would be rejected by the
-        // browser here, breaking CSRF on the accept/reject forms. Use a host-only cookie.
+        // browser here, breaking CSRF on the accept/reject and portal forms. Use a host-only cookie.
         config(['session.domain' => null]);
 
         return $next($request);

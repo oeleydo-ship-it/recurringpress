@@ -15,6 +15,10 @@ return [
             'driver' => 'session',
             'provider' => 'superadmins',
         ],
+        'client' => [
+            'driver' => 'session',
+            'provider' => 'client_accounts',
+        ],
     ],
 
     'providers' => [
@@ -25,6 +29,10 @@ return [
         'superadmins' => [
             'driver' => 'eloquent',
             'model' => App\Models\Superadmin::class,
+        ],
+        'client_accounts' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\ClientAccount::class,
         ],
     ],
 

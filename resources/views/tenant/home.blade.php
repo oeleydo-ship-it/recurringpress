@@ -59,8 +59,13 @@
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>
                 </div>
                 <h2 id="documents-title">Looking for your invoice?</h2>
-                <p class="muted">Open the invoice or quotation link in the email we sent you. Each document has its own private link, so there is no client account to create.</p>
-                <p class="muted">Can't find your link? Contact our team and we'll help you get it.</p>
+                @if ($portalUrl)
+                    <p class="muted">Sign in to the client portal to see all your invoices and quotations, or open the private link in the email we sent you.</p>
+                    <p><a href="{{ $portalUrl }}">Client sign in <span aria-hidden="true">→</span></a></p>
+                @else
+                    <p class="muted">Open the invoice or quotation link in the email we sent you. Each document has its own private link, so there is no client account to create.</p>
+                    <p class="muted">Can't find your link? Contact our team and we'll help you get it.</p>
+                @endif
             </section>
             <section class="card" aria-labelledby="contact-title">
                 <h2 id="contact-title">Get in touch</h2>

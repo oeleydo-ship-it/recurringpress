@@ -19,6 +19,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'pending.install' => \App\Http\Middleware\DetectPendingInstall::class,
             'verified' => \App\Http\Middleware\CheckEmailVerification::class,
             'honeypot' => \App\Http\Middleware\ProtectAgainstSpam::class,
+            'portal' => \App\Http\Middleware\ResolveClientPortal::class,
+            'portal.auth' => \App\Http\Middleware\EnsureClientPortalAccess::class,
         ]);
 
         // Stripe calls the webhook server-to-server without a CSRF token; it is authenticated

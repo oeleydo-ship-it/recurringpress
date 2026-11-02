@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ClientAccount;
 use App\Models\Quotation;
 use App\Notifications\QuotationResponseNotification;
 use App\Services\StripeGateway;
@@ -61,6 +62,7 @@ class PublicQuotationController extends Controller
             ],
             'company' => PublicDocument::company($quotation->company),
             'payment' => $accepted && ! $quotation->converted_invoice_id ? PublicDocument::paymentOptions($settings) : null,
+            'portalUrl' => ClientAccount::portalLinkFor($quotation),
             'urls' => [
                 'document' => route('quotations.public.document', $token),
                 'pdf' => route('quotations.public.download', $token),

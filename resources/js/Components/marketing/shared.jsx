@@ -220,6 +220,7 @@ const planLimits = (p) =>
         p.white_label && 'White label',
         p.custom_domain && 'Custom domain',
         p.subdomain && 'Platform subdomain',
+        p.client_portal && 'Client portal',
         ...(p.features ?? []),
     ].filter(Boolean);
 

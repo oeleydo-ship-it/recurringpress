@@ -28,12 +28,12 @@ class SecurityHeaders
         }
 
         // Never cache authenticated or auth-form pages in shared caches.
-        if ($request->user() || $request->user('superadmin') || $request->is('login', 'register', 'forgot-password', 'reset-password/*', 'superadmin/login')) {
+        if ($request->user() || $request->user('superadmin') || $request->is('login', 'register', 'forgot-password', 'reset-password/*', 'superadmin/login', 'portal', 'portal/*')) {
             $headers->set('Cache-Control', 'no-store, private');
         }
 
         // Client documents, including PDFs, which can't carry a meta tag.
-        if ($request->is('invoice/*', 'quotation/*')) {
+        if ($request->is('invoice/*', 'quotation/*', 'portal', 'portal/*')) {
             $headers->set('X-Robots-Tag', 'noindex, nofollow');
         }
 

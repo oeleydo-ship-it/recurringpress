@@ -1,13 +1,14 @@
 import { Link, router, useForm } from '@inertiajs/react';
-import { AlertTriangle, Building2, Check, Copy, CreditCard, FileSignature, FileText, Globe, ImagePlus, Mail, NotebookPen, Palette, RefreshCw, Save, Send, Settings2, SlidersHorizontal, Sparkles, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Building2, Check, Copy, CreditCard, FileSignature, FileText, Globe, ImagePlus, Mail, NotebookPen, Palette, RefreshCw, Save, Send, Settings2, SlidersHorizontal, Sparkles, Trash2, Users, X } from 'lucide-react';
 import { useState } from 'react';
 import TemplateThumbnail from '@/Components/TemplateThumbnail';
+import ClientPortalTab from '@/Components/settings/ClientPortalTab';
 import CustomFieldsTab from '@/Components/settings/CustomFieldsTab';
 import { Badge, Button, Card, CardBody, CardFooter, CardHeader, FieldError, FormField, Input, PageHeader, Segmented, Select, Switch, Tabs, Textarea, useConfirm } from '@/Components/ui';
 import { route } from '@/lib/route';
 import { cn, formatDateTime } from '@/lib/utils';
 
-export default function SettingsIndex({ company, settings, options, webhookUrl, domain, smtp, customFields }) {
+export default function SettingsIndex({ company, settings, options, webhookUrl, domain, smtp, customFields, clientPortal }) {
     return (
         <>
             <PageHeader
@@ -39,6 +40,7 @@ export default function SettingsIndex({ company, settings, options, webhookUrl, 
                             </div>
                         ),
                     },
+                    { key: 'client-portal', label: 'Client portal', icon: Users, content: <ClientPortalTab portal={clientPortal} /> },
                     { key: 'email', label: 'Email (SMTP)', icon: Mail, content: <EmailTab smtp={smtp} /> },
                     { key: 'preferences', label: 'Preferences', icon: Settings2, content: <PreferencesTab settings={settings} options={options} /> },
                     { key: 'notes', label: 'Notes & terms', icon: NotebookPen, content: <NotesTab settings={settings} /> },

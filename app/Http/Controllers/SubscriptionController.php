@@ -201,7 +201,7 @@ class SubscriptionController extends Controller
     private function planPayload(SubscriptionPlan $p): array
     {
         return [
-            ...$p->only('id', 'name', 'slug', 'description', 'trial_days', 'max_invoices', 'max_clients', 'max_users', 'max_products', 'custom_branding', 'white_label', 'custom_domain', 'subdomain', 'stripe_enabled', 'is_popular'),
+            ...$p->only('id', 'name', 'slug', 'description', 'trial_days', 'max_invoices', 'max_clients', 'max_users', 'max_products', 'custom_branding', 'white_label', 'custom_domain', 'subdomain', 'client_portal', 'stripe_enabled', 'is_popular'),
             ...$p->pricingPayload(),
             'features' => $p->features ?? [],
             // Monthly AI requests the plan includes; null when AI is off for the plan or the platform.

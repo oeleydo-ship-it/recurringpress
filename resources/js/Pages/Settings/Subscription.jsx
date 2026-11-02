@@ -103,7 +103,7 @@ export default function Subscription({ currentPlanId, status, endsAt, billingPer
                                 {limitRow('clients', usage.clients, p.max_clients)}
                                 {limitRow('team members', usage.users, p.max_users)}
                                 {limitRow('products', usage.products, p.max_products)}
-                                {[!free && p.trial_days > 0 && `${p.trial_days}-day trial for new accounts`, p.stripe_enabled && 'Online card payments', p.custom_branding && 'Custom branding', p.white_label && 'White label', p.custom_domain && 'Custom domain', p.subdomain && 'Platform subdomain', p.ai_requests > 0 && `AI assistant · ${p.ai_requests} requests/month`,...(p.features ?? [])].filter(Boolean).map((f) => (
+                                {[!free && p.trial_days > 0 && `${p.trial_days}-day trial for new accounts`, p.stripe_enabled && 'Online card payments', p.custom_branding && 'Custom branding', p.white_label && 'White label', p.custom_domain && 'Custom domain', p.subdomain && 'Platform subdomain', p.client_portal && 'Client portal', p.ai_requests > 0 && `AI assistant · ${p.ai_requests} requests/month`,...(p.features ?? [])].filter(Boolean).map((f) => (
                                     <li key={f} className="flex items-center gap-2">
                                         <Check className="size-4 shrink-0 text-emerald-500" /> {f}
                                     </li>

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\TenantDomain;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -58,6 +59,7 @@ class Company extends Model
         'subscription_ends_at' => 'datetime',
         'onboarding_completed' => 'boolean',
         'onboarding_step' => 'integer',
+        'client_portal_enabled' => 'boolean',
     ];
 
     public function users(): HasMany
@@ -329,9 +331,21 @@ class Company extends Model
             'custom_branding' => $this->subscriptionPlan->custom_branding,
             'api_access' => $this->subscriptionPlan->api_access,
             'ai' => (bool) $this->subscriptionPlan->ai_enabled,
+            'client_portal' => (bool) $this->subscriptionPlan->client_portal,
             'white_label', 'custom_domain', 'subdomain' => (bool) $this->subscriptionPlan->{$feature},
             default => false,
         };
+    }
+
+    /** Clients may sign in: the tenant switched the portal on and its plan (still) includes it. */
+    public function clientPortalOpen(): bool
+    {
+        return $this->client_portal_enabled && filled($this->client_portal_slug) && $this->canUseFeature('client_portal');
+    }
+
+    public function clientPortalUrl(): string
+    {
+        return TenantDomain::url($this, route('portal.login', ['portal' => $this->client_portal_slug], false));
     }
 
     public function hasReachedLimit(string $resource): bool

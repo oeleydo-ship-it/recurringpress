@@ -25,6 +25,9 @@ use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\SeoController;
+use App\Http\Controllers\ClientPortalController;
+use App\Http\Controllers\Portal\AuthController as PortalAuthController;
+use App\Http\Controllers\Portal\DocumentController as PortalDocumentController;
 
 // Installation routes - using AutoInstallController for fresh installs
 Route::middleware(['not.installed', 'throttle:installer'])->prefix('install')->name('install.')->group(function () {
@@ -103,6 +106,30 @@ Route::get('/quotation/{token}/stripe/success', [PublicQuotationController::clas
 Route::post('/stripe/webhook', [PaymentController::class, 'handleWebhook'])
     ->middleware('throttle:60,1')
     ->name('stripe.webhook');
+
+// Client portal (guard "client", one portal per company; available on tenant hosts too)
+Route::get('/portal', [PortalAuthController::class, 'entry'])->name('portal.entry');
+Route::prefix('portal/{portal}')->where(['portal' => '[a-z0-9-]{3,64}'])->middleware('portal')->name('portal.')->group(function () {
+    Route::get('/login', [PortalAuthController::class, 'showLogin'])->name('login');
+    Route::post('/login', [PortalAuthController::class, 'login'])->middleware('throttle:login')->name('login.attempt');
+    Route::get('/forgot-password', [PortalAuthController::class, 'showForgot'])->name('password.request');
+    Route::post('/forgot-password', [PortalAuthController::class, 'sendReset'])->middleware('throttle:password-reset')->name('password.email');
+    Route::get('/set-password/{token}', [PortalAuthController::class, 'showSetPassword'])->whereAlphaNumeric('token')->name('password.set');
+    Route::post('/set-password/{token}', [PortalAuthController::class, 'setPassword'])->whereAlphaNumeric('token')->middleware('throttle:10,1')->name('password.store');
+
+    Route::middleware('portal.auth')->group(function () {
+        Route::get('/', [PortalDocumentController::class, 'dashboard'])->name('dashboard');
+        Route::get('/invoices', [PortalDocumentController::class, 'invoices'])->name('invoices');
+        Route::get('/invoices/{invoice}', [PortalDocumentController::class, 'showInvoice'])->whereNumber('invoice')->name('invoices.show');
+        Route::get('/invoices/{invoice}/pdf', [PortalDocumentController::class, 'invoicePdf'])->whereNumber('invoice')->name('invoices.pdf');
+        Route::get('/quotations', [PortalDocumentController::class, 'quotations'])->name('quotations');
+        Route::get('/quotations/{quotation}', [PortalDocumentController::class, 'showQuotation'])->whereNumber('quotation')->name('quotations.show');
+        Route::get('/quotations/{quotation}/pdf', [PortalDocumentController::class, 'quotationPdf'])->whereNumber('quotation')->name('quotations.pdf');
+        Route::get('/account', [PortalDocumentController::class, 'account'])->name('account');
+        Route::put('/account/password', [PortalDocumentController::class, 'updatePassword'])->middleware('throttle:6,1')->name('account.password');
+        Route::post('/logout', [PortalAuthController::class, 'logout'])->name('logout');
+    });
+});
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
@@ -250,6 +277,12 @@ Route::middleware(['auth', 'tenant', 'verified', \App\Http\Middleware\CheckOnboa
         Route::put('/settings/custom-fields/{customField}', [\App\Http\Controllers\CustomFieldController::class, 'update'])->name('settings.custom-fields.update');
         Route::delete('/settings/custom-fields/{customField}', [\App\Http\Controllers\CustomFieldController::class, 'destroy'])->name('settings.custom-fields.destroy');
         Route::post('/settings/email/test', [SettingsController::class, 'testEmail'])->middleware('throttle:6,1')->name('settings.email.test');
+
+        // Client portal: company-wide switch and per-client access
+        Route::put('/settings/client-portal', [ClientPortalController::class, 'updateSettings'])->name('settings.client-portal');
+        Route::post('/clients/{client}/portal/invite', [ClientPortalController::class, 'invite'])->middleware('throttle:10,1')->name('clients.portal.invite');
+        Route::post('/clients/{client}/portal/revoke', [ClientPortalController::class, 'revoke'])->name('clients.portal.revoke');
+        Route::post('/clients/{client}/portal/restore', [ClientPortalController::class, 'restore'])->name('clients.portal.restore');
     });
 });
 

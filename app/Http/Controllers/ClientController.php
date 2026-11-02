@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Client;
+use App\Models\ClientAccount;
 use App\Support\CustomFields;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -140,6 +141,7 @@ class ClientController extends Controller
             ]),
             'stats' => $stats,
             'customFields' => CustomFields::forForm('client'),
+            'portal' => ClientPortalController::clientPayload(auth()->user()->company, $client),
         ]);
     }
 
@@ -171,7 +173,14 @@ class ClientController extends Controller
             $validated['company_name'] = null;
         }
 
+        $hadPortalLogin = ClientAccount::where('client_id', $client->id)->exists();
+
         $client->update($validated);
+
+        if ($hadPortalLogin && ! ClientAccount::where('client_id', $client->id)->exists()) {
+            return redirect()->route('clients.show', $client)
+                ->with('warning', 'Client updated. Their email changed, so their portal login was removed; invite them again to give the new address access.');
+        }
 
         return redirect()->route('clients.index')
             ->with('success', 'Client updated successfully.');

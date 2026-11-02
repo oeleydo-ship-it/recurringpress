@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ClientAccount;
 use App\Models\CompanySetting;
 use App\Models\Invoice;
 use App\Services\StripeGateway;
@@ -55,6 +56,7 @@ class PublicInvoiceController extends Controller
             ],
             'company' => PublicDocument::company($invoice->company),
             'payment' => $payable ? PublicDocument::paymentOptions($settings) : null,
+            'portalUrl' => ClientAccount::portalLinkFor($invoice),
             'urls' => [
                 'document' => route('invoices.public.document', $token),
                 'pdf' => route('invoices.public.download', $token),

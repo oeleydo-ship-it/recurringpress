@@ -79,6 +79,13 @@ class Client extends Model
                 $builder->where('company_id', auth()->user()->company_id);
             }
         });
+
+        // A new address may be a different person: they get in by a new invitation, not the old password.
+        static::updated(function (Client $client) {
+            if ($client->wasChanged('email') && strcasecmp((string) $client->getOriginal('email'), (string) $client->email) !== 0) {
+                ClientAccount::where('client_id', $client->id)->delete();
+            }
+        });
     }
 
     public function company(): BelongsTo
