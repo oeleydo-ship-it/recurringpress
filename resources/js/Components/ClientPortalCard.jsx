@@ -12,7 +12,7 @@ export default function ClientPortalCard({ client, portal }) {
 
     if (!portal) return null;
 
-    const post = (name) => router.post(route(name, client.id), {}, { preserveScroll: true });
+    const post = (name) => router.post(route(name, client.id), {}, { preserveScroll: true, preserveState: true });
 
     const revoke = async () => {
         if (await confirm({ title: `Remove portal access for ${client.bill_to_name}?`, message: 'They are signed out straight away and can no longer sign in.', confirmText: 'Remove access' })) {
@@ -24,28 +24,8 @@ export default function ClientPortalCard({ client, portal }) {
 
     let body;
 
-    if (!portal.included) {
-        body = (
-            <>
-                <p className="text-sm text-slate-600">Your plan doesn't include the client portal.</p>
-                {auth.user.is_admin ? (
-                    <Button href={route('settings.subscription')} variant="secondary" icon={Sparkles} className="mt-3">
-                        See plans
-                    </Button>
-                ) : null}
-            </>
-        );
-    } else if (!portal.open) {
-        body = (
-            <>
-                <p className="text-sm text-slate-600">The client portal is switched off for your company.</p>
-                {auth.user.is_admin ? (
-                    <Button href={`${route('settings.index')}#client-portal`} variant="secondary" icon={Settings2} className="mt-3">
-                        Open settings
-                    </Button>
-                ) : null}
-            </>
-        );
+    if (!portal.included || !portal.open) {
+        body = <ClientPortalNotice portal={portal} />;
     } else {
         body = (
             <>
@@ -88,5 +68,34 @@ export default function ClientPortalCard({ client, portal }) {
             <CardHeader title="Client portal" actions={status} />
             <CardBody>{body}</CardBody>
         </Card>
+    );
+}
+
+/** Why the portal can't be used yet, and where to fix it: upgrade the plan or switch it on. */
+export function ClientPortalNotice({ portal }) {
+    const { auth } = usePage().props;
+
+    if (!portal.included) {
+        return (
+            <>
+                <p className="text-sm text-slate-600">Upgrade your plan to let this client sign in and see their invoices and quotations.</p>
+                {auth.user.is_admin ? (
+                    <Button href={route('settings.subscription')} variant="secondary" icon={Sparkles} className="mt-3">
+                        Upgrade plan
+                    </Button>
+                ) : null}
+            </>
+        );
+    }
+
+    return (
+        <>
+            <p className="text-sm text-slate-600">The client portal is switched off for your company.</p>
+            {auth.user.is_admin ? (
+                <Button href={`${route('settings.index')}#client-portal`} variant="secondary" icon={Settings2} className="mt-3">
+                    Open settings
+                </Button>
+            ) : null}
+        </>
     );
 }

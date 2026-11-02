@@ -36,22 +36,32 @@ class ClientPortalController extends Controller
 
     public function invite(Client $client): RedirectResponse
     {
-        $company = auth()->user()->company;
+        $error = self::sendInvite(auth()->user()->company, $client, $message);
 
+        return $error ? back()->with('error', $error) : back()->with('success', $message);
+    }
+
+    /**
+     * Create or refresh the client's login and email them a link.
+     *
+     * @return string|null why the invite could not be sent; otherwise $message says what was sent
+     */
+    public static function sendInvite(Company $company, Client $client, ?string &$message = null): ?string
+    {
         if (! $company->clientPortalOpen()) {
-            return back()->with('error', 'Switch on the client portal in Settings first.');
+            return 'Switch on the client portal in Settings first.';
         }
 
         $email = Str::lower(trim((string) $client->email));
 
         if ($email === '') {
-            return back()->with('error', 'Add an email address to this client first.');
+            return 'Add an email address to this client first.';
         }
 
         $account = ClientAccount::where('client_id', $client->id)->first();
 
         if (ClientAccount::where('company_id', $company->id)->where('email', $email)->where('client_id', '!=', $client->id)->exists()) {
-            return back()->with('error', "Another client already signs in with {$email}. Each client needs their own email address.");
+            return "Another client already signs in with {$email}. Each client needs their own email address.";
         }
 
         $account ??= new ClientAccount(['company_id' => $company->id, 'client_id' => $client->id, 'email' => $email]);
@@ -65,7 +75,9 @@ class ClientPortalController extends Controller
 
         SendClientPortalLink::dispatch($account, PortalAuthController::setPasswordUrl($company, $token), $invite);
 
-        return back()->with('success', ($invite ? 'Invitation sent to ' : 'Password link sent to ') . $email . '.');
+        $message = ($invite ? 'Invitation sent to ' : 'Password link sent to ') . $email . '.';
+
+        return null;
     }
 
     public function revoke(Client $client): RedirectResponse
@@ -98,9 +110,9 @@ class ClientPortalController extends Controller
     }
 
     /** Portal state for one client's page in the tenant app. */
-    public static function clientPayload(Company $company, Client $client): array
+    public static function clientPayload(Company $company, ?Client $client = null): array
     {
-        $account = ClientAccount::where('client_id', $client->id)->first();
+        $account = $client ? ClientAccount::where('client_id', $client->id)->first() : null;
 
         return [
             'included' => $company->canUseFeature('client_portal'),
