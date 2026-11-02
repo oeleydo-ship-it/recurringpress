@@ -38,7 +38,7 @@ class BlogController extends Controller
                 // Superadmin-authored HTML (same trust model as before).
                 'content' => $post->content,
                 'meta_title' => $post->meta_title ?: $post->title,
-                'meta_description' => $post->meta_description ?: $post->excerpt ?: Str::limit(trim(strip_tags((string) $post->content)), 160),
+                'meta_description' => $post->meta_description ?: $post->excerpt ?: Str::limit(trim(html_entity_decode(strip_tags((string) $post->content), ENT_QUOTES | ENT_HTML5, 'UTF-8')), 160),
                 'updated_at' => $post->updated_at?->toIso8601String(),
             ],
             'related' => CmsPost::where('is_published', true)

@@ -14,7 +14,11 @@ use Illuminate\Database\Events\MigrationsEnded;
 use Illuminate\Database\Events\NoPendingMigrations;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
+use App\Models\CmsPage;
+use App\Models\CmsPost;
+use App\Models\SystemSetting;
 use App\Services\SuperadminProvisioner;
+use App\Support\Seo;
 use Symfony\Component\Console\Output\ConsoleOutput;
 
 class AppServiceProvider extends ServiceProvider
@@ -35,6 +39,11 @@ class AppServiceProvider extends ServiceProvider
         $this->provisionSuperadminAfterMigrations();
 
         $this->configureRateLimiting();
+
+        foreach ([CmsPage::class, CmsPost::class, SystemSetting::class] as $sitemapSource) {
+            $sitemapSource::saved(fn () => Seo::forgetSitemap());
+            $sitemapSource::deleted(fn () => Seo::forgetSitemap());
+        }
 
         // Minimum password policy for registration, resets and profile changes.
         Password::defaults(function () {

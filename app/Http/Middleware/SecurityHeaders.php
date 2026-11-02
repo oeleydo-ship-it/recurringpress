@@ -32,6 +32,11 @@ class SecurityHeaders
             $headers->set('Cache-Control', 'no-store, private');
         }
 
+        // Client documents, including PDFs, which can't carry a meta tag.
+        if ($request->is('invoice/*', 'quotation/*')) {
+            $headers->set('X-Robots-Tag', 'noindex, nofollow');
+        }
+
         return $response;
     }
 }

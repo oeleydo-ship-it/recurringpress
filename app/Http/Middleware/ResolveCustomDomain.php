@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Support\TenantDomain;
 use App\Support\PublicDocument;
+use App\Support\Seo;
 use App\Models\SystemSetting;
 use Closure;
 use Illuminate\Http\Request;
@@ -30,6 +31,15 @@ class ResolveCustomDomain
         $company = TenantDomain::companyForHost($host);
 
         if (! $company) {
+            return response('Not Found', 404, ['Content-Type' => 'text/plain']);
+        }
+
+        // Never the platform's: the catch-all redirect below would hand crawlers its robots.txt and sitemap.
+        if ($request->path() === 'robots.txt') {
+            return response(Seo::tenantRobotsTxt(), 200, ['Content-Type' => 'text/plain; charset=UTF-8']);
+        }
+
+        if ($request->path() === 'sitemap.xml') {
             return response('Not Found', 404, ['Content-Type' => 'text/plain']);
         }
 

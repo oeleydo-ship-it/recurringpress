@@ -10,6 +10,7 @@ use App\Services\Ai\AiClient;
 use App\Services\Ai\AiProviders;
 use App\Models\SystemSetting;
 use App\Services\CloudflareCustomHostnames;
+use App\Support\Seo;
 use App\Support\TenantDomain;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -39,6 +40,11 @@ class SettingsController extends Controller
             'seo_description' => null,
             'seo_keywords' => null,
             'seo_og_image' => null,
+            'seo_twitter_site' => null,
+            'seo_google_verification' => null,
+            'seo_bing_verification' => null,
+            'seo_robots_txt' => null,
+            'seo_discourage_indexing' => false,
         ]);
 
         return Inertia::render('Superadmin/Settings/General', [
@@ -46,6 +52,12 @@ class SettingsController extends Controller
                 ...collect($s)->except(['site_logo', 'site_favicon', 'seo_og_image'])->all(),
                 'hide_site_name' => $this->bool($s['hide_site_name']),
                 'email_verification_enabled' => $this->bool($s['email_verification_enabled']),
+                'seo_discourage_indexing' => $this->bool($s['seo_discourage_indexing']),
+            ],
+            'webmaster' => [
+                'robots_url' => route('robots'),
+                'sitemap_url' => route('sitemap'),
+                'default_robots' => Seo::defaultRobotsRules(),
             ],
             'images' => [
                 'site_logo' => $s['site_logo'] ? asset('storage/' . $s['site_logo']) : null,
@@ -73,10 +85,25 @@ class SettingsController extends Controller
             'seo_description' => 'nullable|string|max:160',
             'seo_keywords' => 'nullable|string|max:500',
             'seo_og_image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'seo_twitter_site' => ['nullable', 'string', 'regex:/^@?[A-Za-z0-9_]{1,15}$/'],
+            'seo_google_verification' => 'nullable|string|max:500',
+            'seo_bing_verification' => 'nullable|string|max:500',
+            'seo_robots_txt' => 'nullable|string|max:20000',
+            'seo_discourage_indexing' => 'boolean',
         ]);
 
         $validated['hide_site_name'] = $request->boolean('hide_site_name') ? '1' : '0';
         $validated['email_verification_enabled'] = $request->boolean('email_verification_enabled') ? '1' : '0';
+        $validated['seo_discourage_indexing'] = $request->boolean('seo_discourage_indexing') ? '1' : '0';
+        $validated['seo_twitter_site'] = filled($validated['seo_twitter_site'] ?? null) ? '@' . ltrim($validated['seo_twitter_site'], '@') : null;
+
+        // Accepts the bare code or the pasted meta tag; only the bare code is stored.
+        foreach (['seo_google_verification' => 'google-site-verification', 'seo_bing_verification' => 'msvalidate.01'] as $key => $metaName) {
+            if (filled($validated[$key] ?? null)) {
+                $validated[$key] = Seo::verificationCode($validated[$key], $metaName)
+                    ?? throw ValidationException::withMessages([$key => "That doesn't look like a {$metaName} code. Paste the code or the full meta tag."]);
+            }
+        }
 
         foreach (['site_logo', 'site_favicon', 'seo_og_image'] as $file) {
             if ($request->hasFile($file)) {

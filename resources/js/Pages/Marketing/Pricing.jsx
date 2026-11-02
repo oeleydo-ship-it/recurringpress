@@ -5,7 +5,9 @@ import { route } from '@/lib/route';
 export default function Pricing({ title, subtitle, plans, faq }) {
     return (
         <>
-            <Head title="Pricing" />
+            <Head title="Pricing">
+                {subtitle ? <meta name="description" content={subtitle} head-key="description" /> : null}
+            </Head>
             <PageHero eyebrow="Pricing" title={title} subtitle={subtitle} />
             <section className="mx-auto max-w-6xl px-4 pb-24 sm:px-6 lg:px-8">
                 <PricingCards plans={plans} />

@@ -25,7 +25,9 @@ const HIGHLIGHTS = [
 export default function Features({ title, subtitle, items, cta }) {
     return (
         <>
-            <Head title="Features" />
+            <Head title="Features">
+                {subtitle ? <meta name="description" content={subtitle} head-key="description" /> : null}
+            </Head>
             <PageHero eyebrow="Features" title={title} subtitle={subtitle}>
                 <SmartLink href={route('landing.pricing')} className={btnOutline}>
                     See pricing

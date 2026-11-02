@@ -50,10 +50,7 @@ export default function MarketingLayout({ children }) {
             <Head>
                 {seo.description ? <meta name="description" content={seo.description} head-key="description" /> : null}
                 {seo.keywords ? <meta name="keywords" content={seo.keywords} head-key="keywords" /> : null}
-                <meta property="og:site_name" content={site?.name} />
                 {seo.url ? <link rel="canonical" href={seo.url} head-key="canonical" /> : null}
-                {seo.og_image ? <meta property="og:image" content={seo.og_image} head-key="og:image" /> : null}
-                <meta name="twitter:card" content="summary_large_image" />
             </Head>
 
             <header className={cn('sticky top-0 z-40 transition-all duration-200', scrolled ? 'border-b border-slate-200/70 bg-white/85 backdrop-blur-lg' : 'bg-white')}>

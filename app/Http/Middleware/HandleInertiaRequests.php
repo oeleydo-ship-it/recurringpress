@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\Menu;
 use App\Models\SystemSetting;
+use App\Support\Seo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
@@ -43,10 +44,9 @@ class HandleInertiaRequests extends Middleware
                     'hide_site_name' => (bool) SystemSetting::get('hide_site_name'),
                     'footer_text' => SystemSetting::get('landing_footer_text', 'Professional invoicing software for freelancers and small businesses.'),
                     'seo' => [
-                        'description' => SystemSetting::get('seo_description', 'Professional invoicing software for freelancers and small businesses.'),
-                        'keywords' => SystemSetting::get('seo_keywords', 'invoicing, billing, invoice software, freelancer invoicing'),
-                        'og_image' => ($og = SystemSetting::get('seo_og_image')) ? asset('storage/' . $og) : null,
-                        'url' => $request->url(),
+                        'description' => Seo::defaultDescription(),
+                        'keywords' => Seo::defaultKeywords(),
+                        'url' => Seo::canonical($request),
                     ],
                     'menus' => [
                         'header' => Menu::getItems('header'),

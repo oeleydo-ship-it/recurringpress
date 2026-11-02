@@ -6,7 +6,7 @@ export default function CmsPage({ page }) {
     return (
         <>
             <Head title={page.meta_title}>
-                <meta name="description" content={page.meta_description} head-key="description" />
+                {page.meta_description ? <meta name="description" content={page.meta_description} head-key="description" /> : null}
             </Head>
             {page.full_width ? (
                 <>

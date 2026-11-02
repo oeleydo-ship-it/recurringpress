@@ -9,11 +9,7 @@ export default function BlogShow({ post, related }) {
     return (
         <>
             <Head title={post.meta_title}>
-                <meta name="description" content={post.meta_description} head-key="description" />
-                <meta property="og:type" content="article" />
-                <meta property="og:title" content={post.meta_title} />
-                {post.image ? <meta property="og:image" content={post.image} head-key="og:image" /> : null}
-                <meta property="article:published_time" content={post.published_at} />
+                {post.meta_description ? <meta name="description" content={post.meta_description} head-key="description" /> : null}
             </Head>
             <header className="bg-gradient-to-b from-blue-50/80 to-white">
                 <div className="mx-auto max-w-3xl px-4 pt-12 pb-4 text-center sm:px-6 lg:pt-16">

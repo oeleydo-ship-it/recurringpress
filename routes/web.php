@@ -24,6 +24,7 @@ use App\Http\Controllers\AutoInstallController;
 use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\SeoController;
 
 // Installation routes - using AutoInstallController for fresh installs
 Route::middleware(['not.installed', 'throttle:installer'])->prefix('install')->name('install.')->group(function () {
@@ -57,6 +58,18 @@ Route::middleware(['not.installed', 'throttle:installer'])->prefix('auto-install
     Route::post('/install', [AutoInstallController::class, 'runInstall'])->name('run-install');
     Route::get('/complete', [AutoInstallController::class, 'complete'])->name('complete');
     Route::post('/test-connection', [AutoInstallController::class, 'testConnection'])->name('test-connection');
+});
+
+// Crawler files: no session, so no cookie on the response.
+Route::withoutMiddleware([
+    \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
+    \Illuminate\Session\Middleware\StartSession::class,
+    \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+    \Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class,
+    \App\Http\Middleware\HandleInertiaRequests::class,
+])->group(function () {
+    Route::get('/robots.txt', [SeoController::class, 'robots'])->name('robots');
+    Route::get('/sitemap.xml', [SeoController::class, 'sitemap'])->name('sitemap');
 });
 
 // Landing pages
