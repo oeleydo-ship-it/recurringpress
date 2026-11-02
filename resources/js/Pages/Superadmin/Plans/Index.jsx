@@ -1,6 +1,7 @@
 import { router } from '@inertiajs/react';
 import { Package, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { Badge, Button, Card, Dropdown, EmptyState, PageHeader, Table, TBody, TD, TH, THead, TR, useConfirm } from '@/Components/ui';
+import { periodSuffix } from '@/lib/billing';
 import { route } from '@/lib/route';
 import { formatMoney } from '@/lib/utils';
 
@@ -54,8 +55,16 @@ export default function SuperadminPlans({ plans }) {
                                         <span className="font-mono text-xs text-slate-500">{p.slug}</span>
                                     </TD>
                                     <TD align="right">
-                                        <span className="font-medium text-slate-900">{p.price > 0 ? formatMoney(p.price, 'USD') : 'Free'}</span>
-                                        {p.price > 0 ? <span className="block text-xs text-slate-500">per {p.billing_cycle === 'yearly' ? 'year' : 'month'}</span> : null}
+                                        {Object.keys(p.prices).length ? (
+                                            Object.entries(p.prices).map(([period, price]) => (
+                                                <span key={period} className="block">
+                                                    <span className="font-medium text-slate-900">{formatMoney(price, 'USD')}</span>
+                                                    <span className="text-xs text-slate-500"> {periodSuffix(period)}</span>
+                                                </span>
+                                            ))
+                                        ) : (
+                                            <span className="font-medium text-slate-900">Free</span>
+                                        )}
                                     </TD>
                                     <TD className="hidden md:table-cell" align="center">
                                         {limit(p.max_invoices)} / {limit(p.max_clients)} / {limit(p.max_users)}

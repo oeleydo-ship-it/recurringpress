@@ -29,6 +29,7 @@ const TYPES = {
     recurring_generated: { icon: Repeat, tone: 'bg-brand-50 text-brand-600' },
     plan_changed: { icon: Sparkles, tone: 'bg-brand-50 text-brand-600' },
     trial_ending: { icon: Sparkles, tone: 'bg-amber-50 text-amber-600' },
+    renewal_due: { icon: Sparkles, tone: 'bg-amber-50 text-amber-600' },
     payout_requested: { icon: Landmark, tone: 'bg-slate-100 text-slate-600' },
     payout_approved: { icon: Landmark, tone: 'bg-emerald-50 text-emerald-600' },
     payout_paid: { icon: Landmark, tone: 'bg-emerald-50 text-emerald-600' },

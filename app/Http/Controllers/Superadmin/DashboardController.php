@@ -61,11 +61,11 @@ class DashboardController extends Controller
         ]);
     }
 
-    /** Monthly recurring revenue: monthly plans + yearly plans / 12, active tenants. */
+    /** Monthly recurring revenue: monthly plans + yearly plans / 12, active tenants. Lifetime purchases don't recur. */
     private function mrr(): float
     {
         return round((float) Company::where('subscription_status', 'active')
             ->join('subscription_plans', 'companies.subscription_plan_id', '=', 'subscription_plans.id')
-            ->sum(DB::raw("CASE WHEN subscription_plans.billing_cycle = 'yearly' THEN subscription_plans.price / 12 ELSE subscription_plans.price END")), 2);
+            ->sum(DB::raw("CASE companies.billing_period WHEN 'yearly' THEN COALESCE(subscription_plans.price_yearly, 0) / 12 WHEN 'monthly' THEN COALESCE(subscription_plans.price_monthly, 0) ELSE 0 END")), 2);
     }
 }

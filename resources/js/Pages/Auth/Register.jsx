@@ -12,7 +12,7 @@ const rules = [
     { label: 'A number', test: (v) => /\d/.test(v) },
 ];
 
-export default function Register({ plan, planSlug, email = '' }) {
+export default function Register({ plan, planSlug, period = null, email = '' }) {
     const hp = useHoneypot();
     const form = useForm({
         ...hp.fields,
@@ -22,6 +22,7 @@ export default function Register({ plan, planSlug, email = '' }) {
         password: '',
         password_confirmation: '',
         plan: planSlug ?? 'free',
+        period,
     });
 
     const submit = (e) => {

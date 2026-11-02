@@ -224,12 +224,14 @@ function PlanSummary({ usage, canManage, dateFormat }) {
         .filter((l) => l.limit !== null)
         .sort((a, b) => b.percent - a.percent);
 
-    const dateLine = usage.ends_at
+    const dateLine = usage.is_lifetime
+        ? 'Lifetime · no renewal'
+        : usage.ends_at
         ? usage.status === 'trial'
             ? `Trial ends ${formatDate(usage.ends_at, dateFormat)}`
             : ['cancelled', 'expired', 'past_due'].includes(usage.status)
               ? `Ended ${formatDate(usage.ends_at, dateFormat)}`
-              : `Renews ${formatDate(usage.ends_at, dateFormat)}`
+              : `${usage.billing_period === 'yearly' ? 'Yearly' : 'Monthly'} · renew by ${formatDate(usage.ends_at, dateFormat)}`
         : null;
 
     const hint =

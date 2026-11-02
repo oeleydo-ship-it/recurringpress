@@ -63,7 +63,8 @@ export default function SuperadminUserShow({ user, company }) {
                         <CardHeader title={company.name} description={company.email} icon={Building2} actions={<StatusBadge status={company.status} />} />
                         <dl className="grid gap-5 p-5 sm:grid-cols-3">
                             <DescriptionItem label="Plan">{company.plan}</DescriptionItem>
-                            <DescriptionItem label="Renews / ends">{company.subscription_ends_at ? formatDate(company.subscription_ends_at) : '—'}</DescriptionItem>
+                            <DescriptionItem label="Billing">{company.billing_period ? `${company.billing_period[0].toUpperCase()}${company.billing_period.slice(1)}` : '—'}</DescriptionItem>
+                            <DescriptionItem label="Renews / ends">{company.is_lifetime ? 'Never (lifetime)' : company.subscription_ends_at ? formatDate(company.subscription_ends_at) : '—'}</DescriptionItem>
                             <DescriptionItem label="Currency">{company.currency}</DescriptionItem>
                             <DescriptionItem label="Onboarding">{company.onboarding_completed ? 'Completed' : 'In progress'}</DescriptionItem>
                             <DescriptionItem label="Created">{formatDate(company.created_at)}</DescriptionItem>

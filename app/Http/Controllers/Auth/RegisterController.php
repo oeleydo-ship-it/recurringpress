@@ -24,6 +24,7 @@ class RegisterController extends Controller
         return Inertia::render('Auth/Register', [
             'plan' => $plan?->only('name', 'slug', 'price', 'trial_days'),
             'planSlug' => $plan?->slug ?? 'free',
+            'period' => $plan?->offersPeriod($request->query('period')) ? $request->query('period') : null,
             // Prefill from the marketing footer's "start with your email" box.
             'email' => filter_var($request->query('email'), FILTER_VALIDATE_EMAIL) ?: '',
         ]);
@@ -54,6 +55,7 @@ class RegisterController extends Controller
             'password' => ['required', 'string', 'confirmed', Password::defaults()],
             'company_name' => ['required', 'string', 'min:2', 'max:150', $noLinksOrMarkup],
             'plan' => ['nullable', 'string', 'max:100', 'exists:subscription_plans,slug'],
+            'period' => ['nullable', 'string', 'in:monthly,yearly,lifetime'],
         ], [
             'name.not_regex' => 'Your name may not contain links or HTML.',
             'company_name.not_regex' => 'Company name may not contain links or HTML.',
@@ -82,7 +84,7 @@ class RegisterController extends Controller
                 ]);
             }
 
-            $subscription = $plan->initialSubscription();
+            $subscription = $plan->initialSubscription($request->input('period'));
 
             $company = Company::create([
                 'name' => $request->company_name,

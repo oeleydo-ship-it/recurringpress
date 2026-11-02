@@ -66,6 +66,30 @@ Artisan::command('subscriptions:notify-trial-ending', function () {
     $this->info("Checked {$notified} trials ending soon.");
 })->purpose('Notify tenants whose free trial ends within three days');
 
+// Paid terms don't charge automatically, so tenants need a nudge to pay again before access lapses.
+// Lifetime subscriptions have no end date, so the date filter leaves them out.
+Artisan::command('subscriptions:notify-renewal-due', function () {
+    $notified = 0;
+
+    Company::where('subscription_status', 'active')
+        ->whereNotNull('subscription_ends_at')
+        ->whereBetween('subscription_ends_at', [now(), now()->addDays(7)])
+        ->each(function (Company $company) use (&$notified) {
+            TenantNotifier::notify(
+                $company,
+                'renewal_due',
+                'Your subscription ends on ' . $company->subscription_ends_at->format('M j, Y'),
+                'Renew from the billing page to keep your plan.',
+                TenantNotifier::path('settings.subscription'),
+                TenantNotifier::AUDIENCE_ADMINS,
+                'renewal_due:' . $company->subscription_ends_at->toDateString(),
+            );
+            $notified++;
+        });
+
+    $this->info("Checked {$notified} subscriptions ending soon.");
+})->purpose('Notify tenants whose paid term ends within seven days');
+
 Artisan::command('quotations:check-expired', function () {
     $updated = Quotation::withoutGlobalScopes()
         ->whereIn('status', [Quotation::STATUS_SENT, Quotation::STATUS_DRAFT])
@@ -113,6 +137,7 @@ Artisan::command('blog:publish-scheduled', function (AiBlogService $blogService)
 Schedule::command('invoices:check-overdue')->daily();
 Schedule::command('quotations:check-expired')->daily();
 Schedule::command('subscriptions:notify-trial-ending')->daily();
+Schedule::command('subscriptions:notify-renewal-due')->daily();
 Schedule::command('invoices:generate-recurring')->daily()->withoutOverlapping()->onOneServer();
 Schedule::command('system:check-updates')->daily();
 Schedule::command('domains:recheck')->hourly()->withoutOverlapping()->onOneServer();

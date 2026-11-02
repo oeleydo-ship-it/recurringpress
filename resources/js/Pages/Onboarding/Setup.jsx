@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Building2, Check, CheckCircle2, CreditCard, Imag
 import { useState } from 'react';
 import TemplateThumbnail from '@/Components/TemplateThumbnail';
 import { Badge, Button, FieldError, FormField, Input, Segmented, Select, Switch } from '@/Components/ui';
+import { periodSuffix } from '@/lib/billing';
 import { route } from '@/lib/route';
 import { useApplyTheme } from '@/lib/theme';
 import { cn, formatMoney, themeStyle } from '@/lib/utils';
@@ -422,7 +423,7 @@ function PlanStep({ plans, currentPlanId, currency }) {
                         </div>
                         <p className="mt-3">
                             <span className="text-3xl font-semibold tracking-tight text-slate-900">{paid ? formatMoney(p.price, 'USD') : 'Free'}</span>
-                            {paid ? <span className="text-sm text-slate-500"> / {p.billing_cycle === 'yearly' ? 'year' : 'month'}</span> : null}
+                            {paid ? <span className="text-sm text-slate-500"> {periodSuffix(p.billing_cycle)}</span> : null}
                         </p>
                         <ul className="mt-4 flex-1 space-y-2 text-sm text-slate-600">
                             <li className="flex gap-2">
@@ -443,8 +444,8 @@ function PlanStep({ plans, currentPlanId, currency }) {
                         </ul>
                         {!current ? (
                             paid ? (
-                                <Button href={route('settings.subscription.payment', p.id)} variant="secondary" className="mt-5 w-full">
-                                    Upgrade
+                                <Button href={Object.keys(p.prices).length > 1 ? route('settings.subscription') : route('settings.subscription.payment', { plan: p.id, period: p.billing_cycle })} variant="secondary" className="mt-5 w-full">
+                                    {Object.keys(p.prices).length > 1 ? 'See billing options' : 'Upgrade'}
                                 </Button>
                             ) : (
                                 <Button variant="secondary" className="mt-5 w-full" onClick={() => router.post(route('settings.subscription.change', p.id))}>

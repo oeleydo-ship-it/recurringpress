@@ -58,7 +58,7 @@ export default function SuperadminReports({ range, ranges, period, kpis, monthly
                                 <TR key={p.name}>
                                     <TD>
                                         <span className="font-medium text-slate-900">{p.name}</span>
-                                        <span className="block text-xs text-slate-500">{p.price > 0 ? `${usd(p.price)} / ${p.billing_cycle === 'yearly' ? 'yr' : 'mo'}` : 'Free'}</span>
+                                        <span className="block text-xs text-slate-500">{p.price_summary}</span>
                                     </TD>
                                     <TD align="right">{p.active}</TD>
                                     <TD align="right">{p.companies}</TD>

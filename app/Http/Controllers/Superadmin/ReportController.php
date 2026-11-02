@@ -28,7 +28,8 @@ class ReportController extends Controller
         [$start, $end] = $this->range($range);
         $platform = fn () => Payment::withoutGlobalScopes()->where('via_app_gateway', true)->where('status', 'completed');
 
-        $mrrCase = "CASE WHEN subscription_plans.billing_cycle = 'yearly' THEN subscription_plans.price / 12 ELSE subscription_plans.price END";
+        // Lifetime purchases are one-off revenue, so they add nothing here.
+        $mrrCase = "CASE companies.billing_period WHEN 'yearly' THEN COALESCE(subscription_plans.price_yearly, 0) / 12 WHEN 'monthly' THEN COALESCE(subscription_plans.price_monthly, 0) ELSE 0 END";
         $mrr = (float) Company::where('subscription_status', 'active')
             ->join('subscription_plans', 'companies.subscription_plan_id', '=', 'subscription_plans.id')
             ->sum(DB::raw($mrrCase));
@@ -67,11 +68,12 @@ class ReportController extends Controller
                 'companies as active_count' => fn ($q) => $q->where('subscription_status', 'active'),
             ])->ordered()->get()->map(fn ($p) => [
                 'name' => $p->name,
-                'price' => (float) $p->price,
-                'billing_cycle' => $p->billing_cycle,
+                'price_summary' => $p->priceSummary(),
                 'companies' => $p->companies_count,
                 'active' => $p->active_count,
-                'mrr' => round($p->active_count * ($p->billing_cycle === 'yearly' ? $p->price / 12 : $p->price), 2),
+                'mrr' => round((float) Company::where('subscription_status', 'active')->where('subscription_plan_id', $p->id)
+                    ->join('subscription_plans', 'companies.subscription_plan_id', '=', 'subscription_plans.id')
+                    ->sum(DB::raw($mrrCase)), 2),
             ]),
             'topCompanies' => $platform()->whereBetween('payment_date', [$start, $end])
                 ->select('company_id', DB::raw('SUM(amount) as total'), DB::raw('COUNT(*) as count'))

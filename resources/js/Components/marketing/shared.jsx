@@ -35,6 +35,8 @@ import {
     Zap,
 } from 'lucide-react';
 import { Button } from '@/Components/ui';
+import BillingPeriodToggle from '@/Components/BillingPeriodToggle';
+import { isFreePlan, offeredPeriods, periodSuffix } from '@/lib/billing';
 import { route } from '@/lib/route';
 import { cn, formatMoney } from '@/lib/utils';
 
@@ -223,42 +225,26 @@ const planLimits = (p) =>
 
 /**
  * Plan cards in three tones: white, black (popular) and solid blue (the top-priced plan).
- * The Monthly/Annual switch only appears when plans exist for both billing cycles.
+ * The Monthly/Yearly/Lifetime switch appears when plans can be bought on more than one period,
+ * and shows only the plans offering the selected period (free plans always show).
  */
 export function PricingCards({ plans }) {
-    const hasYearly = plans.some((p) => p.billing_cycle === 'yearly');
-    const hasMonthly = plans.some((p) => p.billing_cycle !== 'yearly');
-    const both = hasYearly && hasMonthly;
-    const [cycle, setCycle] = useState('monthly');
-    // Free plans show under both cycles.
-    const shown = both ? plans.filter((p) => p.price <= 0 || (cycle === 'yearly') === (p.billing_cycle === 'yearly')) : plans;
-    const top = shown.length > 1 ? shown.reduce((best, p) => (p.price > best.price ? p : best), shown[0]) : null;
+    const periods = offeredPeriods(plans);
+    const [cycle, setCycle] = useState(periods[0] ?? 'monthly');
+    const priceOf = (p) => p.prices?.[cycle] ?? 0;
+    const shown = plans.filter((p) => isFreePlan(p) || p.prices[cycle] != null);
+    const top = shown.length > 1 ? shown.reduce((best, p) => (priceOf(p) > priceOf(best) ? p : best), shown[0]) : null;
 
     return (
         <div>
-            {both ? (
+            {periods.length > 1 ? (
                 <div className="mb-12 flex justify-center">
-                    <div className="inline-flex rounded-full bg-slate-100 p-1 text-sm font-medium" role="group" aria-label="Billing period">
-                        {[
-                            ['monthly', 'Monthly'],
-                            ['yearly', 'Annual'],
-                        ].map(([key, label]) => (
-                            <button
-                                key={key}
-                                type="button"
-                                aria-pressed={cycle === key}
-                                onClick={() => setCycle(key)}
-                                className={cn('rounded-full px-5 py-1.5 transition', cycle === key ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800')}
-                            >
-                                {label}
-                            </button>
-                        ))}
-                    </div>
+                    <BillingPeriodToggle periods={periods} value={cycle} onChange={setCycle} activeClassName="text-blue-600" />
                 </div>
             ) : null}
             <div className={cn('mx-auto grid gap-6', shown.length >= 3 ? 'max-w-6xl lg:grid-cols-3' : 'max-w-3xl md:grid-cols-2')}>
                 {shown.map((p) => {
-                    const tone = top && p.id === top.id && top.price > 0 ? 'blue' : p.is_popular ? 'dark' : 'light';
+                    const tone = top && p.id === top.id && priceOf(top) > 0 ? 'blue' : p.is_popular ? 'dark' : 'light';
                     const light = tone === 'light';
                     return (
                         <div
@@ -276,15 +262,17 @@ export function PricingCards({ plans }) {
                             </div>
                             {p.description ? <p className={cn('mt-2 text-sm', light ? 'text-slate-500' : 'text-white/75')}>{p.description}</p> : null}
                             <p className="mt-6 flex items-baseline gap-1">
-                                <span className="text-4xl font-semibold tracking-tight">{p.price > 0 ? formatMoney(p.price, 'USD') : 'Free'}</span>
-                                {p.price > 0 ? <span className={cn('text-sm', light ? 'text-slate-500' : 'text-white/70')}>/{p.billing_cycle === 'yearly' ? 'year' : 'month'}</span> : null}
+                                <span className="text-4xl font-semibold tracking-tight">{priceOf(p) > 0 ? formatMoney(priceOf(p), 'USD') : 'Free'}</span>
+                                {priceOf(p) > 0 ? <span className={cn('text-sm', light ? 'text-slate-500' : 'text-white/70')}>{periodSuffix(cycle)}</span> : null}
                             </p>
+                            {cycle === 'yearly' && p.yearly_saving_percent && priceOf(p) > 0 ? <p className={cn('mt-1 text-sm font-medium', light ? 'text-emerald-600' : 'text-white')}>Save {p.yearly_saving_percent}% compared to monthly</p> : null}
+                            {cycle === 'lifetime' && priceOf(p) > 0 ? <p className={cn('mt-1 text-sm font-medium', light ? 'text-emerald-600' : 'text-white')}>Pay once, no renewals</p> : null}
                             <Button
-                                href={route('register', { plan: p.slug })}
+                                href={route('register', isFreePlan(p) ? { plan: p.slug } : { plan: p.slug, period: cycle })}
                                 size="lg"
                                 className={cn('mt-6 w-full text-sm', light ? 'bg-white text-slate-800 ring-1 ring-slate-200 hover:bg-slate-50' : 'bg-white hover:bg-slate-100', tone === 'blue' ? 'text-blue-700' : 'text-slate-900')}
                             >
-                                {p.price > 0 ? (p.trial_days > 0 ? `Start ${p.trial_days}-day trial` : 'Get started') : 'Get started free'}
+                                {priceOf(p) > 0 ? (p.trial_days > 0 ? `Start ${p.trial_days}-day trial` : 'Get started') : 'Get started free'}
                             </Button>
                             <p className={cn('mt-8 text-xs font-semibold tracking-wider uppercase', light ? 'text-slate-500' : 'text-white/70')}>{p.name} plan includes</p>
                             <ul className="mt-4 flex-1 space-y-3 text-sm">

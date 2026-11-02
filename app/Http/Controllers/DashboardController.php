@@ -147,7 +147,9 @@ class DashboardController extends Controller
 
         return [
             'plan' => $plan?->name ?? 'Free',
-            'price' => $plan?->formatted_price ?? 'Free',
+            'price' => $plan?->formattedPriceFor($company->billing_period ?? $plan->billing_cycle) ?? 'Free',
+            'billing_period' => $isFree ? null : ($company->billing_period ?? $plan->billing_cycle),
+            'is_lifetime' => $company->isLifetime(),
             'is_free' => $isFree,
             'status' => $status,
             'ends_at' => $company->subscription_ends_at?->toDateString(),

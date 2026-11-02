@@ -39,6 +39,7 @@ class Company extends Model
         'subscription_started_at',
         'subscription_ends_at',
         'subscription_status',
+        'billing_period',
         'onboarding_completed',
         'onboarding_step',
     ];
@@ -295,6 +296,14 @@ class Company extends Model
     {
         return $this->subscription_status === 'active' &&
             ($this->subscription_ends_at === null || $this->subscription_ends_at->isFuture());
+    }
+
+    /** A paid-once subscription: active with no end date, so nothing can lapse or renew. */
+    public function isLifetime(): bool
+    {
+        return $this->billing_period === SubscriptionPlan::LIFETIME
+            && $this->subscription_status === 'active'
+            && $this->subscription_ends_at === null;
     }
 
     public function isOnTrial(): bool

@@ -64,8 +64,7 @@ class PlanController extends Controller
             'name' => 'required|string|max:255',
             'slug' => ['nullable', 'string', 'max:255', 'alpha_dash', Rule::unique('subscription_plans', 'slug')->ignore($plan?->id)],
             'description' => 'nullable|string|max:1000',
-            'price' => 'required|numeric|min:0|max:100000',
-            'billing_cycle' => 'required|in:monthly,yearly',
+            ...$this->priceRules($request),
             'trial_days' => 'required|integer|min:0|max:365',
             'max_invoices' => 'nullable|integer|min:0',
             'max_clients' => 'nullable|integer|min:0',
@@ -84,6 +83,13 @@ class PlanController extends Controller
             'is_active' => 'boolean',
             'is_popular' => 'boolean',
             'order' => 'nullable|integer|min:0|max:1000',
+        ], [
+            'price_monthly.required' => 'Enter a monthly price or switch the monthly option off.',
+            'price_yearly.required' => 'Enter a yearly price or switch the yearly option off.',
+            'price_lifetime.required' => 'Enter a lifetime price or switch the lifetime option off.',
+            'price_monthly.gt' => 'The monthly price must be more than zero. Switch every option off for a free plan.',
+            'price_yearly.gt' => 'The yearly price must be more than zero. Switch every option off for a free plan.',
+            'price_lifetime.gt' => 'The lifetime price must be more than zero. Switch every option off for a free plan.',
         ]);
 
         $validated['slug'] = ($validated['slug'] ?? null) ?: Str::slug($validated['name']);
@@ -92,18 +98,33 @@ class PlanController extends Controller
         foreach (['max_invoices', 'max_clients', 'max_users', 'max_products', 'max_ai_requests'] as $limit) {
             $validated[$limit] = $validated[$limit] ?? null;
         }
-        foreach (['stripe_enabled', 'custom_branding', 'white_label', 'custom_domain', 'subdomain', 'api_access', 'ai_enabled', 'is_active', 'is_popular'] as $flag) {
+        foreach (['monthly_enabled', 'yearly_enabled', 'lifetime_enabled', 'stripe_enabled', 'custom_branding', 'white_label', 'custom_domain', 'subdomain', 'api_access', 'ai_enabled', 'is_active', 'is_popular'] as $flag) {
             $validated[$flag] = $request->boolean($flag);
         }
 
         return $validated;
     }
 
+    /** A price is only required for options that are switched on; a switched-off price is kept for later. */
+    private function priceRules(Request $request): array
+    {
+        $rules = [];
+        foreach (SubscriptionPlan::PERIODS as $period) {
+            $rules["{$period}_enabled"] = 'boolean';
+            $rules["price_{$period}"] = $request->boolean("{$period}_enabled")
+                ? 'required|numeric|gt:0|max:100000'
+                : 'nullable|numeric|min:0|max:100000';
+        }
+
+        return $rules;
+    }
+
     private function payload(SubscriptionPlan $p): array
     {
         return [
-            ...$p->only('id', 'name', 'slug', 'description', 'billing_cycle', 'trial_days', 'max_invoices', 'max_clients', 'max_users', 'max_products', 'max_ai_requests', 'stripe_enabled', 'custom_branding', 'white_label', 'custom_domain', 'subdomain', 'api_access', 'ai_enabled', 'is_active', 'is_popular', 'order'),
-            'price' => (float) $p->price,
+            ...$p->only('id', 'name', 'slug', 'description', 'price_monthly', 'price_yearly', 'price_lifetime', 'monthly_enabled', 'yearly_enabled', 'lifetime_enabled', 'trial_days', 'max_invoices', 'max_clients', 'max_users', 'max_products', 'max_ai_requests', 'stripe_enabled', 'custom_branding', 'white_label', 'custom_domain', 'subdomain', 'api_access', 'ai_enabled', 'is_active', 'is_popular', 'order'),
+            ...$p->pricingPayload(),
+            'price_summary' => $p->priceSummary(),
             'features' => $p->features ?? [],
         ];
     }

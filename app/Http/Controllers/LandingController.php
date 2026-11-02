@@ -164,8 +164,8 @@ class LandingController extends Controller
     private function plans(): array
     {
         return SubscriptionPlan::active()->ordered()->get()->map(fn ($p) => [
-            ...$p->only('id', 'name', 'slug', 'description', 'billing_cycle', 'trial_days', 'max_invoices', 'max_clients', 'max_users', 'max_products', 'custom_branding', 'white_label', 'custom_domain', 'subdomain', 'stripe_enabled', 'is_popular'),
-            'price' => (float) $p->price,
+            ...$p->only('id', 'name', 'slug', 'description', 'trial_days', 'max_invoices', 'max_clients', 'max_users', 'max_products', 'custom_branding', 'white_label', 'custom_domain', 'subdomain', 'stripe_enabled', 'is_popular'),
+            ...$p->pricingPayload(),
             'features' => $p->features ?? [],
         ])->all();
     }

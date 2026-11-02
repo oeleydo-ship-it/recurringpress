@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\Company;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -63,6 +64,8 @@ class UserController extends Controller
                 'currency' => $company->currency,
                 'plan' => $company->subscriptionPlan?->name,
                 'status' => $company->subscription_status,
+                'billing_period' => $company->billing_period,
+                'is_lifetime' => $company->isLifetime(),
                 'subscription_ends_at' => $company->subscription_ends_at?->toDateString(),
                 'onboarding_completed' => (bool) $company->onboarding_completed,
                 'created_at' => $company->created_at?->toIso8601String(),
@@ -88,7 +91,7 @@ class UserController extends Controller
                 'phone' => $user->phone,
                 'role' => $user->role,
                 'is_active' => $user->is_active !== false,
-                'company' => $user->company ? ['id' => $user->company->id, 'name' => $user->company->name, 'plan_id' => $user->company->subscription_plan_id, 'status' => $user->company->subscription_status] : null,
+                'company' => $user->company ? ['id' => $user->company->id, 'name' => $user->company->name, 'plan_id' => $user->company->subscription_plan_id, 'status' => $user->company->subscription_status, 'billing_period' => $user->company->billing_period] : null,
             ],
             'roles' => User::roles(),
             'plans' => SubscriptionPlan::ordered()->get(['id', 'name', 'price'])
@@ -108,6 +111,7 @@ class UserController extends Controller
             'is_active' => 'boolean',
             'plan_id' => ['nullable', 'integer', Rule::exists('subscription_plans', 'id')],
             'subscription_status' => 'nullable|in:active,trial,cancelled,expired',
+            'billing_period' => 'nullable|in:monthly,yearly,lifetime',
         ]);
 
         $user->update([
@@ -120,13 +124,40 @@ class UserController extends Controller
 
         // Support can move a tenant between plans (e.g. to comp a customer).
         if ($user->company && $request->filled('plan_id')) {
-            $user->company->update(array_filter([
-                'subscription_plan_id' => $validated['plan_id'],
-                'subscription_status' => $validated['subscription_status'] ?? null,
-            ]));
+            $user->company->update([
+                ...array_filter([
+                    'subscription_plan_id' => $validated['plan_id'],
+                    'subscription_status' => $validated['subscription_status'] ?? null,
+                ]),
+                ...$this->billingPeriodChange($user->company, $validated),
+            ]);
         }
 
         return redirect()->route('superadmin.users.show', $user)->with('success', 'User updated.');
+    }
+
+    /**
+     * Keeps the company's period consistent with what support picked: free plans have no period,
+     * lifetime has no end date, and leaving lifetime starts a normal term from today.
+     */
+    private function billingPeriodChange(Company $company, array $validated): array
+    {
+        $period = SubscriptionPlan::find($validated['plan_id'])?->isFree() ? null : ($validated['billing_period'] ?? $company->billing_period);
+
+        if ($period === SubscriptionPlan::LIFETIME) {
+            // With no end date a trial or expired status would be meaningless; cancelled still revokes access.
+            return [
+                'billing_period' => $period,
+                'subscription_ends_at' => null,
+                'subscription_status' => ($validated['subscription_status'] ?? null) === 'cancelled' ? 'cancelled' : 'active',
+            ];
+        }
+
+        if ($period && $company->billing_period === SubscriptionPlan::LIFETIME) {
+            return ['billing_period' => $period, 'subscription_ends_at' => SubscriptionPlan::termEnd($period, now())];
+        }
+
+        return ['billing_period' => $period];
     }
 
     public function destroy(User $user)

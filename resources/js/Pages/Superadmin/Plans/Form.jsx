@@ -1,7 +1,13 @@
 import { useForm } from '@inertiajs/react';
 import { Save } from 'lucide-react';
-import { Button, Card, CardBody, CardFooter, CardHeader, FormField, Input, PageHeader, Select, Switch, Textarea } from '@/Components/ui';
+import { Button, Card, CardBody, CardFooter, CardHeader, FormField, Input, PageHeader, Switch, Textarea } from '@/Components/ui';
 import { route } from '@/lib/route';
+
+const BILLING_OPTIONS = [
+    { period: 'monthly', label: 'Monthly', hint: 'One month of access per payment.' },
+    { period: 'yearly', label: 'Yearly', hint: 'One year of access per payment.' },
+    { period: 'lifetime', label: 'Lifetime', hint: 'One payment. Never renews or expires.' },
+];
 
 export default function PlanForm({ plan }) {
     const editing = Boolean(plan);
@@ -9,8 +15,12 @@ export default function PlanForm({ plan }) {
         name: plan?.name ?? '',
         slug: plan?.slug ?? '',
         description: plan?.description ?? '',
-        price: plan?.price ?? 0,
-        billing_cycle: plan?.billing_cycle ?? 'monthly',
+        monthly_enabled: plan?.monthly_enabled ?? false,
+        yearly_enabled: plan?.yearly_enabled ?? false,
+        lifetime_enabled: plan?.lifetime_enabled ?? false,
+        price_monthly: plan?.price_monthly ?? '',
+        price_yearly: plan?.price_yearly ?? '',
+        price_lifetime: plan?.price_lifetime ?? '',
         trial_days: plan?.trial_days ?? 14,
         max_invoices: plan?.max_invoices ?? '',
         max_clients: plan?.max_clients ?? '',
@@ -31,6 +41,7 @@ export default function PlanForm({ plan }) {
     });
     const d = form.data;
     const e = form.errors;
+    const yearlySaving = d.monthly_enabled && d.yearly_enabled && d.price_monthly > 0 && d.price_yearly > 0 ? Math.round((1 - d.price_yearly / (d.price_monthly * 12)) * 100) : 0;
     const num = (name, label, hint) => (
         <FormField label={label} error={e[name]} hint={hint}>
             <Input type="number" min="0" value={d[name] ?? ''} onChange={(ev) => form.setData(name, ev.target.value)} placeholder="Unlimited" />
@@ -42,7 +53,7 @@ export default function PlanForm({ plan }) {
         form.transform((data) => ({
             ...data,
             features: data.features.split('\n').map((f) => f.trim()).filter(Boolean),
-            ...Object.fromEntries(['max_invoices', 'max_clients', 'max_users', 'max_products', 'max_ai_requests'].map((k) => [k, data[k] === '' ? null : data[k]])),
+            ...Object.fromEntries(['max_invoices', 'max_clients', 'max_users', 'max_products', 'max_ai_requests', 'price_monthly', 'price_yearly', 'price_lifetime'].map((k) => [k, data[k] === '' ? null : data[k]])),
         }));
         if (editing) form.put(route('superadmin.plans.update', plan.id));
         else form.post(route('superadmin.plans.store'));
@@ -62,18 +73,30 @@ export default function PlanForm({ plan }) {
                             <FormField label="Slug" error={e.slug} hint="Used in /register?plan=… — leave blank to generate.">
                                 <Input value={d.slug} onChange={(ev) => form.setData('slug', ev.target.value)} className="font-mono" />
                             </FormField>
-                            <FormField label="Price (USD)" required error={e.price}>
-                                <Input type="number" min="0" step="0.01" prefix="$" value={d.price} onChange={(ev) => form.setData('price', ev.target.value)} invalid={Boolean(e.price)} />
-                            </FormField>
-                            <FormField label="Billing cycle" error={e.billing_cycle}>
-                                <Select value={d.billing_cycle} onChange={(ev) => form.setData('billing_cycle', ev.target.value)} options={{ monthly: 'Monthly', yearly: 'Yearly' }} />
-                            </FormField>
                             <FormField label="Trial days" error={e.trial_days} hint="0 disables trials for paid plans. Free plans stay active without a trial.">
                                 <Input type="number" min="0" max="365" value={d.trial_days} onChange={(ev) => form.setData('trial_days', ev.target.value)} />
                             </FormField>
                             <FormField label="Description" error={e.description} className="sm:col-span-2">
                                 <Textarea rows={2} value={d.description} onChange={(ev) => form.setData('description', ev.target.value)} />
                             </FormField>
+                        </CardBody>
+                    </Card>
+                    <Card>
+                        <CardHeader title="Billing options" description="Switch on each way this plan can be bought. Leave all off for a free plan. Paid terms are prepaid; customers pay again to renew." />
+                        <CardBody className="space-y-4">
+                            {BILLING_OPTIONS.map(({ period, label, hint }) => (
+                                <div key={period} className="grid items-start gap-4 sm:grid-cols-2">
+                                    <div>
+                                        <Switch label={label} checked={d[`${period}_enabled`]} onChange={(v) => form.setData(`${period}_enabled`, v)} />
+                                        <p className="mt-1 text-xs text-slate-500">{hint}</p>
+                                    </div>
+                                    <FormField label={`${label} price (USD)`} required={d[`${period}_enabled`]} error={e[`price_${period}`]}>
+                                        <Input type="number" min="0" step="0.01" prefix="$" value={d[`price_${period}`] ?? ''} onChange={(ev) => form.setData(`price_${period}`, ev.target.value)} disabled={!d[`${period}_enabled`]} invalid={Boolean(e[`price_${period}`])} />
+                                    </FormField>
+                                </div>
+                            ))}
+                            {yearlySaving > 0 ? <p className="text-sm font-medium text-emerald-600">Yearly saves customers {yearlySaving}% compared to monthly.</p> : null}
+                            {yearlySaving < 0 ? <p className="text-sm font-medium text-amber-700">Yearly costs more than twelve monthly payments.</p> : null}
                         </CardBody>
                     </Card>
                     <Card>

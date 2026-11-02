@@ -7,7 +7,9 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Quotation;
 use App\Models\Receipt;
+use App\Models\SubscriptionPlan;
 use App\Services\StripeGateway;
+use App\Services\SubscriptionBilling;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -205,12 +207,17 @@ class PaymentController extends Controller
         }
 
         $intent = $event->data->object;
+
+        if (($intent->metadata->type ?? null) === 'subscription_upgrade') {
+            return $this->handleSubscriptionPayment($intent, $verifiedCompanyId);
+        }
+
         $invoiceId = (int) ($intent->metadata->invoice_id ?? 0);
         $quotationId = (int) ($intent->metadata->quotation_id ?? 0);
         $companyId = (int) ($intent->metadata->company_id ?? 0);
 
         if ((! $invoiceId && ! $quotationId) || ! $companyId) {
-            return response()->json(['status' => 'ignored']); // e.g. subscription payments
+            return response()->json(['status' => 'ignored']);
         }
 
         if ($verifiedCompanyId !== null && $verifiedCompanyId !== $companyId) {
@@ -235,6 +242,38 @@ class PaymentController extends Controller
             }
         } catch (\Throwable $e) {
             Log::error('Stripe webhook failed to record payment', ['intent' => $intent->id ?? null, 'error' => $e->getMessage()]);
+
+            return response()->json(['error' => 'Processing failed'], 500); // Stripe will retry
+        }
+
+        return response()->json(['status' => 'success']);
+    }
+
+    /**
+     * Activates the plan even if the customer never returned from Stripe. Only the platform's own
+     * webhook secret counts: a tenant's secret must not be able to grant that tenant a plan.
+     */
+    private function handleSubscriptionPayment(object $intent, ?int $verifiedCompanyId)
+    {
+        if ($verifiedCompanyId !== null) {
+            Log::warning('Subscription payment event signed with a tenant webhook secret', ['company_id' => $verifiedCompanyId, 'intent' => $intent->id ?? null]);
+
+            return response()->json(['error' => 'Not a platform event'], 400);
+        }
+
+        $company = Company::find((int) ($intent->metadata->company_id ?? 0));
+        $plan = SubscriptionPlan::find((int) ($intent->metadata->plan_id ?? 0));
+
+        if (! $company || ! $plan || ! SubscriptionBilling::intentIsValid($intent, $company, $plan)) {
+            Log::warning('Rejected subscription payment event', ['intent' => $intent->id ?? null]);
+
+            return response()->json(['status' => 'unknown or mismatched subscription payment']);
+        }
+
+        try {
+            SubscriptionBilling::applyPayment($company, $plan, $intent);
+        } catch (\Throwable $e) {
+            Log::error('Stripe webhook failed to apply subscription payment', ['intent' => $intent->id ?? null, 'error' => $e->getMessage()]);
 
             return response()->json(['error' => 'Processing failed'], 500); // Stripe will retry
         }

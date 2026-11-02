@@ -89,7 +89,7 @@ class OnboardingController extends Controller
             'invoiceTemplates' => CompanySetting::invoiceTemplates(),
             'colorPresets' => CompanySetting::colorPresets(),
             'plans' => SubscriptionPlan::active()->ordered()->get()
-                ->map(fn ($p) => $p->only('id', 'name', 'slug', 'price', 'billing_cycle', 'trial_days', 'description', 'features', 'max_invoices', 'max_clients', 'max_users'))
+                ->map(fn ($p) => [...$p->only('id', 'name', 'slug', 'trial_days', 'description', 'features', 'max_invoices', 'max_clients', 'max_users'), ...$p->pricingPayload()])
                 ->values(),
             'currentPlanId' => $company->subscription_plan_id,
             'teamMembers' => $company->users()->where('id', '!=', $user->id)->get(['id', 'name', 'email', 'role']),

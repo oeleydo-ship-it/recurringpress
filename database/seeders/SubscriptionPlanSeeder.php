@@ -14,9 +14,7 @@ class SubscriptionPlanSeeder extends Seeder
             [
                 'name' => 'Free Tier',
                 'description' => '10 Invoice Unlimited Customer',
-                'price' => 0,
                 'trial_days' => 0,
-                'billing_cycle' => 'monthly',
                 'max_invoices' => 10,
                 'max_clients' => null,
                 'max_users' => 1,
@@ -38,9 +36,9 @@ class SubscriptionPlanSeeder extends Seeder
             [
                 'name' => 'Pro',
                 'description' => 'Perfect for growing businesses',
-                'price' => 19,
+                'price_monthly' => 19,
+                'monthly_enabled' => true,
                 'trial_days' => 14,
-                'billing_cycle' => 'monthly',
                 'max_invoices' => null,
                 'max_clients' => null,
                 'max_users' => 5,
@@ -62,9 +60,9 @@ class SubscriptionPlanSeeder extends Seeder
             [
                 'name' => 'Enterprise',
                 'description' => 'For large teams and enterprises',
-                'price' => 49,
+                'price_monthly' => 49,
+                'monthly_enabled' => true,
                 'trial_days' => 14,
-                'billing_cycle' => 'monthly',
                 'max_invoices' => null,
                 'max_clients' => null,
                 'max_users' => null,

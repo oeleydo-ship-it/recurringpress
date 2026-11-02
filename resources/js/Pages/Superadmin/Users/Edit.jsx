@@ -12,6 +12,7 @@ export default function SuperadminUserEdit({ user, roles, plans }) {
         is_active: user.is_active,
         plan_id: user.company?.plan_id ?? '',
         subscription_status: user.company?.status ?? 'active',
+        billing_period: user.company?.billing_period ?? '',
     });
     const e = form.errors;
 
@@ -57,6 +58,9 @@ export default function SuperadminUserEdit({ user, roles, plans }) {
                                     onChange={(ev) => form.setData('subscription_status', ev.target.value)}
                                     options={{ active: 'Active', trial: 'Trial', cancelled: 'Cancelled', expired: 'Expired' }}
                                 />
+                            </FormField>
+                            <FormField label="Billing period" error={e.billing_period} hint="Lifetime removes the end date. Free plans ignore this.">
+                                <Select value={form.data.billing_period} onChange={(ev) => form.setData('billing_period', ev.target.value)} options={{ monthly: 'Monthly', yearly: 'Yearly', lifetime: 'Lifetime' }} placeholder="— unchanged —" />
                             </FormField>
                         </CardBody>
                     </Card>
