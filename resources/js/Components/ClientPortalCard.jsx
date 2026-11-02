@@ -1,14 +1,18 @@
+import { useState } from 'react';
 import { router, usePage } from '@inertiajs/react';
-import { Ban, Send, Settings2, ShieldCheck, Sparkles } from 'lucide-react';
+import { Ban, Check, Copy, KeyRound, Send, Settings2, ShieldCheck, Sparkles } from 'lucide-react';
 import { Badge, Button, Card, CardBody, CardHeader, useConfirm } from '@/Components/ui';
 import { route } from '@/lib/route';
 import { formatDateTime } from '@/lib/utils';
 
 /** Client page: this client's portal access. Only owners and admins can change it. */
 export default function ClientPortalCard({ client, portal }) {
-    const { auth } = usePage().props;
+    const page = usePage();
+    const { auth } = page.props;
     const confirm = useConfirm();
     const account = portal?.account;
+    const issued = page.flash?.portal_credentials;
+    const credentials = issued?.client_id === client.id ? issued : null;
 
     if (!portal) return null;
 
@@ -17,6 +21,12 @@ export default function ClientPortalCard({ client, portal }) {
     const revoke = async () => {
         if (await confirm({ title: `Remove portal access for ${client.bill_to_name}?`, message: 'They are signed out straight away and can no longer sign in.', confirmText: 'Remove access' })) {
             post('clients.portal.revoke');
+        }
+    };
+
+    const regenerate = async () => {
+        if (await confirm({ title: `Generate a new password for ${client.bill_to_name}?`, message: 'Their current password stops working and they are signed out.', confirmText: 'Generate password' })) {
+            post('clients.portal.password');
         }
     };
 
@@ -37,16 +47,25 @@ export default function ClientPortalCard({ client, portal }) {
                 ) : (
                     <p className="text-sm text-slate-600">{client.email ? `Invite ${client.email} to see their invoices and quotations.` : 'Add an email address to this client to invite them.'}</p>
                 )}
+                <PortalCredentials key={credentials?.password} credentials={credentials} />
                 {auth.user.is_admin ? (
                     <div className="mt-3 flex flex-wrap gap-2">
                         {!account ? (
-                            <Button variant="secondary" icon={Send} disabled={!client.email} onClick={() => post('clients.portal.invite')}>
-                                Invite to portal
-                            </Button>
+                            <>
+                                <Button variant="secondary" icon={Send} disabled={!client.email} onClick={() => post('clients.portal.invite')}>
+                                    Invite to portal
+                                </Button>
+                                <Button variant="secondary" icon={KeyRound} disabled={!client.email} onClick={() => post('clients.portal.password')}>
+                                    Generate password
+                                </Button>
+                            </>
                         ) : account.is_enabled ? (
                             <>
                                 <Button variant="secondary" icon={Send} onClick={() => post('clients.portal.invite')}>
                                     {account.activated ? 'Send password link' : 'Resend invitation'}
+                                </Button>
+                                <Button variant="secondary" icon={KeyRound} onClick={regenerate}>
+                                    Generate new password
                                 </Button>
                                 <Button variant="secondary" icon={Ban} onClick={revoke}>
                                     Remove access
@@ -68,6 +87,47 @@ export default function ClientPortalCard({ client, portal }) {
             <CardHeader title="Client portal" actions={status} />
             <CardBody>{body}</CardBody>
         </Card>
+    );
+}
+
+/** A password just generated for this client. It only exists here until the page is left. */
+function PortalCredentials({ credentials }) {
+    const [copied, setCopied] = useState(false);
+    const [closed, setClosed] = useState(false);
+
+    if (!credentials || closed) return null;
+
+    const copy = () => {
+        navigator.clipboard?.writeText(`Portal: ${credentials.url}\nEmail: ${credentials.email}\nPassword: ${credentials.password}`);
+        setCopied(true);
+    };
+
+    return (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+            <p className="text-sm font-medium text-slate-900">Copy this now. The password won't be shown again.</p>
+            <dl className="mt-2 space-y-1 text-sm text-slate-700">
+                <div className="break-all">
+                    <dt className="inline font-medium">Portal: </dt>
+                    <dd className="inline">{credentials.url}</dd>
+                </div>
+                <div className="break-all">
+                    <dt className="inline font-medium">Email: </dt>
+                    <dd className="inline">{credentials.email}</dd>
+                </div>
+                <div className="break-all">
+                    <dt className="inline font-medium">Password: </dt>
+                    <dd className="inline font-mono">{credentials.password}</dd>
+                </div>
+            </dl>
+            <div className="mt-3 flex flex-wrap gap-2">
+                <Button variant="secondary" icon={copied ? Check : Copy} onClick={copy}>
+                    {copied ? 'Copied' : 'Copy details'}
+                </Button>
+                <Button variant="ghost" onClick={() => setClosed(true)}>
+                    Done
+                </Button>
+            </div>
+        </div>
     );
 }
 

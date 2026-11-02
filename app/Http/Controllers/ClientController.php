@@ -83,7 +83,7 @@ class ClientController extends Controller
             'name' => 'required|string|max:255',
             'client_type' => 'required|in:individual,company',
             'company_name' => 'required_if:client_type,company|nullable|string|max:255',
-            'email' => 'nullable|email|max:255|required_if:invite_to_portal,true',
+            'email' => 'nullable|email|max:255|required_if:portal_access,invite,password',
             'phone' => 'nullable|string|max:50',
             'tax_number' => 'nullable|string|max:100',
             'address' => 'nullable|string|max:500',
@@ -92,7 +92,7 @@ class ClientController extends Controller
             'postal_code' => 'nullable|string|max:20',
             'country' => 'nullable|string|max:100',
             'notes' => 'nullable|string|max:1000',
-        ], ['email.required_if' => 'Add an email address to invite this client to the portal.']));
+        ], ['email.required_if' => 'Add an email address. Your client signs in to the portal with it.']));
         $validated['custom_values'] = $custom ?: null;
 
         if ($validated['client_type'] === 'individual') {
@@ -108,11 +108,17 @@ class ClientController extends Controller
         }
 
         // Same rule as the invite route: only owners and admins can give portal access.
-        if ($request->boolean('invite_to_portal') && auth()->user()->isAdmin()) {
-            $error = ClientPortalController::sendInvite($company, $client, $sent);
+        $access = $request->input('portal_access');
+
+        if (in_array($access, ['invite', 'password'], true) && auth()->user()->isAdmin()) {
+            $error = $access === 'invite'
+                ? ClientPortalController::sendInvite($company, $client, $sent)
+                : ClientPortalController::issuePassword($company, $client);
 
             return redirect()->route('clients.show', $client)
-                ->with($error ? 'warning' : 'success', $error ? "Client created, but the invitation wasn't sent. {$error}" : "Client created. {$sent}");
+                ->with($error ? 'warning' : 'success', $error
+                    ? "Client created, but they don't have portal access yet. {$error}"
+                    : 'Client created. ' . ($sent ?? 'Copy their password now to share it.'));
         }
 
         return redirect()->route('clients.index')

@@ -10,7 +10,9 @@ use App\Models\Company;
 use App\Support\TenantDomain;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Inertia\Inertia;
 
 /**
  * The tenant's side of the client portal: the company-wide switch (Settings → Client portal) and
@@ -41,6 +43,53 @@ class ClientPortalController extends Controller
         return $error ? back()->with('error', $error) : back()->with('success', $message);
     }
 
+    /** Gives the client a password the tenant shares themselves, replacing any earlier one. */
+    public function generatePassword(Client $client): RedirectResponse
+    {
+        $error = self::issuePassword(auth()->user()->company, $client);
+
+        return $error ? back()->with('error', $error) : back()->with('success', 'Password generated. Copy it now to share with your client.');
+    }
+
+    /**
+     * Sets a random password and flashes the login details once for the tenant to copy. Only the
+     * hash is stored. Inertia flash data stays out of browser history.
+     *
+     * @return string|null why no password could be issued
+     */
+    public static function issuePassword(Company $company, Client $client): ?string
+    {
+        $error = self::accountFor($company, $client, $account);
+
+        if ($error) {
+            return $error;
+        }
+
+        // No symbols, so it survives being read out or pasted into a message.
+        $password = Str::password(16, symbols: false);
+
+        $account->is_enabled = true;
+        $account->invited_at = now();
+        $account->forceFill([
+            'password' => $password, // hashed by the model cast
+            'remember_token' => Str::random(60),
+            'setup_token_hash' => null,
+            'setup_token_expires_at' => null,
+            'activated_at' => $account->activated_at ?? now(),
+        ])->save();
+
+        Log::notice('Client portal password generated', ['company_id' => $company->id, 'client_id' => $client->id, 'user_id' => auth()->id()]);
+
+        Inertia::flash('portal_credentials', [
+            'client_id' => $client->id,
+            'url' => $company->clientPortalUrl(),
+            'email' => $account->email,
+            'password' => $password,
+        ]);
+
+        return null;
+    }
+
     /**
      * Create or refresh the client's login and email them a link.
      *
@@ -48,23 +97,13 @@ class ClientPortalController extends Controller
      */
     public static function sendInvite(Company $company, Client $client, ?string &$message = null): ?string
     {
-        if (! $company->clientPortalOpen()) {
-            return 'Switch on the client portal in Settings first.';
+        $error = self::accountFor($company, $client, $account);
+
+        if ($error) {
+            return $error;
         }
 
-        $email = Str::lower(trim((string) $client->email));
-
-        if ($email === '') {
-            return 'Add an email address to this client first.';
-        }
-
-        $account = ClientAccount::where('client_id', $client->id)->first();
-
-        if (ClientAccount::where('company_id', $company->id)->where('email', $email)->where('client_id', '!=', $client->id)->exists()) {
-            return "Another client already signs in with {$email}. Each client needs their own email address.";
-        }
-
-        $account ??= new ClientAccount(['company_id' => $company->id, 'client_id' => $client->id, 'email' => $email]);
+        $email = $account->email;
         $account->is_enabled = true;
         $account->invited_at = now();
         $account->save();
@@ -125,6 +164,33 @@ class ClientPortalController extends Controller
                 'last_login_at' => $account->last_login_at?->toIso8601String(),
             ] : null,
         ];
+    }
+
+    /**
+     * The client's login, new and unsaved if they have none yet.
+     *
+     * @return string|null why this client can't have a login
+     */
+    private static function accountFor(Company $company, Client $client, ?ClientAccount &$account = null): ?string
+    {
+        if (! $company->clientPortalOpen()) {
+            return 'Switch on the client portal in Settings first.';
+        }
+
+        $email = Str::lower(trim((string) $client->email));
+
+        if ($email === '') {
+            return 'Add an email address to this client first.';
+        }
+
+        if (ClientAccount::where('company_id', $company->id)->where('email', $email)->where('client_id', '!=', $client->id)->exists()) {
+            return "Another client already signs in with {$email}. Each client needs their own email address.";
+        }
+
+        $account = ClientAccount::where('client_id', $client->id)->first()
+            ?? new ClientAccount(['company_id' => $company->id, 'client_id' => $client->id, 'email' => $email]);
+
+        return null;
     }
 
     private static function newSlug(Company $company): string

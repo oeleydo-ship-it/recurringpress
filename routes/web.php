@@ -281,6 +281,7 @@ Route::middleware(['auth', 'tenant', 'verified', \App\Http\Middleware\CheckOnboa
         // Client portal: company-wide switch and per-client access
         Route::put('/settings/client-portal', [ClientPortalController::class, 'updateSettings'])->name('settings.client-portal');
         Route::post('/clients/{client}/portal/invite', [ClientPortalController::class, 'invite'])->middleware('throttle:10,1')->name('clients.portal.invite');
+        Route::post('/clients/{client}/portal/password', [ClientPortalController::class, 'generatePassword'])->middleware('throttle:10,1')->name('clients.portal.password');
         Route::post('/clients/{client}/portal/revoke', [ClientPortalController::class, 'revoke'])->name('clients.portal.revoke');
         Route::post('/clients/{client}/portal/restore', [ClientPortalController::class, 'restore'])->name('clients.portal.restore');
     });

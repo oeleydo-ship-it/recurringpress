@@ -1,10 +1,16 @@
 import { useForm, usePage } from '@inertiajs/react';
-import { Save } from 'lucide-react';
+import { Ban, KeyRound, Save, Send } from 'lucide-react';
 import ClientFields, { emptyClient } from '@/Components/ClientFields';
 import ClientPortalCard, { ClientPortalNotice } from '@/Components/ClientPortalCard';
 import { CustomFieldInputs, initialCustomValues } from '@/Components/CustomFields';
-import { Button, Card, CardBody, CardFooter, PageHeader, Switch } from '@/Components/ui';
+import { Button, Card, CardBody, CardFooter, PageHeader, Segmented, Switch } from '@/Components/ui';
 import { route } from '@/lib/route';
+
+const PORTAL_ACCESS_HINTS = {
+    none: "They can't sign in to see their invoices and quotations. You can give access later.",
+    invite: 'Emails them a link to set their own password.',
+    password: 'Creates a password for you to copy and share with them yourself. It is shown once, after you create the client.',
+};
 
 export default function ClientForm({ client, customFields = [], portal }) {
     const { auth } = usePage().props;
@@ -12,7 +18,7 @@ export default function ClientForm({ client, customFields = [], portal }) {
     const form = useForm({
         ...(editing ? { ...emptyClient, ...nullsToEmpty(client) } : emptyClient),
         custom_values: initialCustomValues(customFields, client?.custom_values),
-        ...(editing ? {} : { invite_to_portal: false }),
+        ...(editing ? {} : { portal_access: 'none' }),
     });
 
     const submit = (e) => {
@@ -39,12 +45,18 @@ export default function ClientForm({ client, customFields = [], portal }) {
                                 <h3 className="mb-4 text-sm font-semibold text-slate-900">Client portal</h3>
                                 {portal.included && portal.open ? (
                                     auth.user.is_admin ? (
-                                        <Switch
-                                            label="Invite to the client portal"
-                                            description="Emails them a link to set a password, so they can sign in and see their invoices and quotations."
-                                            checked={form.data.invite_to_portal}
-                                            onChange={(v) => form.setData('invite_to_portal', v)}
-                                        />
+                                        <>
+                                            <Segmented
+                                                value={form.data.portal_access}
+                                                onChange={(v) => form.setData('portal_access', v)}
+                                                options={[
+                                                    { value: 'none', label: 'No access', icon: Ban },
+                                                    { value: 'invite', label: 'Email invitation', icon: Send },
+                                                    { value: 'password', label: 'Generate password', icon: KeyRound },
+                                                ]}
+                                            />
+                                            <p className="mt-2 text-sm text-slate-500">{PORTAL_ACCESS_HINTS[form.data.portal_access]}</p>
+                                        </>
                                     ) : (
                                         <p className="text-sm text-slate-600">An owner or admin can invite this client from their page.</p>
                                     )

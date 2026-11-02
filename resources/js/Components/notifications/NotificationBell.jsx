@@ -1,5 +1,5 @@
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react';
-import { Link, usePage } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import { Bell, BellOff } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { postJson, requestJson } from '@/lib/http';
@@ -30,10 +30,16 @@ export default function NotificationBell() {
     }, []);
 
     useEffect(() => {
-        const tick = () => document.visibilityState === 'visible' && refresh();
+        // A request alongside a form submit can use up or overwrite its one-time session flash.
+        let visiting = false;
+        const stopStart = router.on('start', () => { visiting = true; });
+        const stopFinish = router.on('finish', () => { visiting = false; });
+        const tick = () => !visiting && document.visibilityState === 'visible' && refresh();
         const id = setInterval(tick, POLL_MS);
         document.addEventListener('visibilitychange', tick);
         return () => {
+            stopStart();
+            stopFinish();
             clearInterval(id);
             document.removeEventListener('visibilitychange', tick);
         };
