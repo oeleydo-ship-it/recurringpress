@@ -26,7 +26,7 @@ class LandingController extends Controller
                 'cta_url' => $this->safeUrl(SystemSetting::get('landing_cta_url'), route('register')),
             ],
             'trust' => [
-                'text' => SystemSetting::get('landing_trust_text', 'Trusted by thousands of freelancers and businesses'),
+                'text' => SystemSetting::get('landing_trust_text', 'Trusted by freelancers and growing businesses'),
                 'badges' => $this->json('landing_trust_badges_json'),
             ],
             'features' => [

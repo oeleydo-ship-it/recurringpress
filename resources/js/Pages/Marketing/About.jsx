@@ -25,15 +25,15 @@ export default function About() {
                         <div className="mt-6 space-y-4 text-base leading-relaxed text-slate-500">
                             <p>{name} was born out of frustration with complicated invoicing software. As freelancers ourselves, we knew there had to be a better way.</p>
                             <p>We built it to be simple, beautiful, and powerful — everything you need to create professional invoices and get paid faster, without the complexity.</p>
-                            <p>Today, thousands of freelancers and small businesses trust {name} to manage their invoicing and grow their businesses.</p>
+                            <p>Today, hundreds of freelancers and small businesses trust {name} to manage their invoicing and grow their businesses.</p>
                         </div>
                     </div>
                     <dl className="grid grid-cols-2 gap-3 rounded-3xl bg-blue-50 p-3 ring-1 ring-blue-100 sm:gap-4 sm:p-6">
                         {[
-                            ['10K+', 'Active users'],
-                            ['$50M+', 'Invoiced'],
-                            ['100K+', 'Invoices sent'],
-                            ['4.9★', 'User rating'],
+                            ['980+', 'Active users'],
+                            ['$2.4M+', 'Invoiced'],
+                            ['12K+', 'Invoices sent'],
+                            ['17', 'Invoice templates'],
                         ].map(([n, l]) => (
                             <div key={l} className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-7">
                                 <dt className="text-sm text-slate-500">{l}</dt>

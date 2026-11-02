@@ -18,7 +18,7 @@ class CmsPagesSeeder extends Seeder
 <p>InvoiceApp was born out of frustration with complicated invoicing software. As freelancers ourselves, we knew there had to be a better way.</p>
 <p>We built InvoiceApp to be simple, beautiful, and powerful - everything you need to create professional invoices and get paid faster, without the complexity.</p>
 <h2>Our Mission</h2>
-<p>Today, thousands of freelancers and small businesses trust InvoiceApp to manage their invoicing and grow their businesses.</p>
+<p>Today, hundreds of freelancers and small businesses trust InvoiceApp to manage their invoicing and grow their businesses.</p>
 <h2>Our Values</h2>
 <ul>
 <li><strong>Customer First</strong> - Everything we build is designed with our customers in mind.</li>

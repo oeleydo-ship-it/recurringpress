@@ -45,7 +45,7 @@ export const BLOCK_TYPES = {
             spacing: { top: 12, bottom: 12 },
         },
     },
-    cta: { label: 'Call to action', icon: Megaphone, data: { title: 'Ready to get started?', subtitle: 'Join thousands of happy customers', buttonText: 'Sign Up Now', buttonUrl: '#', bgColor: '#1e293b', spacing: { top: 12, bottom: 12 } } },
+    cta: { label: 'Call to action', icon: Megaphone, data: { title: 'Ready to get started?', subtitle: 'Join freelancers and small businesses getting paid faster', buttonText: 'Sign Up Now', buttonUrl: '#', bgColor: '#1e293b', spacing: { top: 12, bottom: 12 } } },
     testimonial: { label: 'Testimonial', icon: Quote, data: { quote: 'This product changed my life!', author: 'John Doe', role: 'CEO, Company', avatar: '', spacing: { top: 8, bottom: 8 } } },
     pricing: {
         label: 'Pricing',
