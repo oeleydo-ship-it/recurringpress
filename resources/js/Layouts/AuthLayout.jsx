@@ -32,20 +32,7 @@ export default function AuthLayout({ children }) {
                     style={{ backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)', backgroundSize: '44px 44px' }}
                 />
 
-                <Link href={isAdmin ? route('superadmin.login') : route('landing')} className="relative flex items-center gap-3">
-                    {site?.logo ? (
-                        <img src={site.logo} alt={site.name} className="h-9 w-auto brightness-0 invert" />
-                    ) : (
-                        <>
-                            <span className="flex size-10 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/20 backdrop-blur">
-                                <FileText className="size-5 text-white" />
-                            </span>
-                            <span className="text-lg font-semibold text-white">{site?.name}</span>
-                        </>
-                    )}
-                </Link>
-
-                <div className="relative max-w-md">
+                <div className="relative my-auto max-w-md">
                     {isAdmin ? (
                         <>
                             <h2 className="text-3xl font-semibold tracking-tight text-white">Platform administration</h2>
@@ -80,11 +67,17 @@ export default function AuthLayout({ children }) {
             {/* Form panel */}
             <main className="flex flex-col justify-center bg-white px-6 py-12 sm:px-12 xl:px-20">
                 <div className="mx-auto w-full max-w-sm">
-                    <Link href={isAdmin ? route('superadmin.login') : route('landing')} className="mb-10 flex items-center gap-2.5 lg:hidden">
-                        <span className="flex size-9 items-center justify-center rounded-xl bg-indigo-600">
-                            <FileText className="size-4 text-white" />
-                        </span>
-                        <span className="text-base font-semibold text-slate-900">{site?.name}</span>
+                    <Link href={isAdmin ? route('superadmin.login') : route('landing')} className="mb-10 flex items-center gap-2.5">
+                        {site?.logo ? (
+                            <img src={site.logo} alt={site.name} className="h-10 w-auto max-w-full object-contain object-left" />
+                        ) : (
+                            <>
+                                <span className="flex size-9 items-center justify-center rounded-xl bg-indigo-600">
+                                    <FileText className="size-4 text-white" />
+                                </span>
+                                <span className="text-base font-semibold text-slate-900">{site?.name}</span>
+                            </>
+                        )}
                     </Link>
                     <div className="animate-slide-up">{children}</div>
                 </div>
